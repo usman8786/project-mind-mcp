@@ -1,0 +1,61 @@
+# Binding ownership policy for project-mind-mcp.
+#
+# This repository is user-owned, so ownership is expressed with individual
+# GitHub handles rather than organization teams.
+#
+# CODEOWNERS is the binding merge gate, not the reviewer directory.
+# Advisory area reviewers are recorded in MAINTAINERS.md. A handle appears in
+# this file only when that person is authorized to satisfy binding code-owner
+# approval for the matching path.
+
+# Default owner gate: every pull request crosses the project owner's desk.
+* @usman8786
+
+# Security-sensitive and authority-sensitive surfaces.
+/.github/ @usman8786
+/scripts/ @usman8786
+/Makefile.pmm @usman8786
+/SECURITY.md @usman8786
+/docs/SECURITY-DISCLOSURE.md @usman8786
+/CONTRIBUTING.md @usman8786
+/CODE_OF_CONDUCT.md @usman8786
+/DCO @usman8786
+/LICENSE @usman8786
+/MAINTAINERS.md @usman8786
+
+# Release and distribution surfaces.
+/pkg/ @usman8786
+/install.sh @usman8786
+/install.ps1 @usman8786
+/server.json @usman8786
+/glama.json @usman8786
+/flake.nix @usman8786
+/flake.lock @usman8786
+/THIRD_PARTY.md @usman8786
+/vendored/ @usman8786
+/internal/pmm/vendored/ @usman8786
+
+# Core product surfaces.
+/src/foundation/ @usman8786
+/src/store/ @usman8786
+/src/cypher/ @usman8786
+/src/graph_buffer/ @usman8786
+/src/mcp/ @usman8786
+/src/cli/ @usman8786
+/src/discover/ @usman8786
+/src/watcher/ @usman8786
+/src/pipeline/ @usman8786
+/src/git/ @usman8786
+/src/semantic/ @usman8786
+/src/simhash/ @usman8786
+/src/traces/ @usman8786
+/src/ui/ @usman8786
+
+# Extraction, language support, and graph UI.
+/internal/pmm/ @usman8786
+/tools/ @usman8786
+/graph-ui/ @usman8786
+
+# Test and reproduction infrastructure.
+/tests/ @usman8786
+/test-infrastructure/ @usman8786

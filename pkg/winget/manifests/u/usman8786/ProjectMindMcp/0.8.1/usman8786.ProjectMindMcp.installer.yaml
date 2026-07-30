@@ -1,0 +1,17 @@
+PackageIdentifier: usman8786.ProjectMindMcp
+PackageVersion: 0.8.1
+InstallerLocale: en-US
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: project-mind-mcp.exe
+    PortableCommandAlias: project-mind-mcp
+Platform:
+  - Windows.Desktop
+  - Windows.Universal
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/usman8786/project-mind-mcp/releases/download/v0.8.1/project-mind-mcp-windows-amd64.zip
+    InstallerSha256: a602ad090ed3f49d86c55472f73f27ad7055222806a82358f2e08513e027f00f
+ManifestType: installer
+ManifestVersion: 1.6.0

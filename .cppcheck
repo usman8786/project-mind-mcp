@@ -1,0 +1,15 @@
+# cppcheck suppressions file
+# Only universally-supported suppression IDs here.
+# Version-specific IDs go in Makefile.pmm as --suppress flags.
+
+# Vendored code
+*:internal/pmm/vendored/*
+*:vendored/*
+
+# Test framework patterns
+unusedFunction:tests/*
+
+# Intentional patterns
+constVariablePointer
+constParameterPointer
+constVariable
