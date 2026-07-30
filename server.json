@@ -1,0 +1,32 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.usman8786/project-mind-mcp",
+  "title": "Project Mind",
+  "description": "Codebase knowledge graph for AI agents \u2014 159 languages, sub-ms queries, 99% fewer tokens.",
+  "repository": {
+    "url": "https://github.com/usman8786/project-mind-mcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://usman8786.github.io/project-mind-mcp/",
+  "version": "0.8.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "project-mind-mcp",
+      "version": "0.8.1",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      }
+    },
+    {
+      "registryType": "pypi",
+      "identifier": "project-mind-mcp",
+      "version": "0.8.1",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+PackageIdentifier: usman8786.ProjectMindMcp
+PackageVersion: 0.8.1
+PackageLocale: en-US
+Publisher: usman8786
+PublisherUrl: https://github.com/usman8786
+PublisherSupportUrl: https://github.com/usman8786/project-mind-mcp/issues
+PackageName: project-mind-mcp
+PackageUrl: https://github.com/usman8786/project-mind-mcp
+License: MIT
+LicenseUrl: https://github.com/usman8786/project-mind-mcp/blob/main/LICENSE
+ShortDescription: Fast code intelligence engine for AI coding agents
+Description: |-
+  project-mind-mcp is a single static binary MCP server that indexes codebases
+  at extreme speed and exposes 14 MCP tools for AI coding agents. Full indexes an
+  average repository in milliseconds, the Linux kernel (28M LOC) in 3 minutes.
+  Supports 155 languages via vendored tree-sitter grammars. Zero dependencies.
+  Plug and play across 11 coding agents including Claude Code, Codex CLI, and Zed.
+Moniker: project-mind-mcp
+Tags:
+  - mcp
+  - ai
+  - claude
+  - code-intelligence
+  - codebase
+  - developer-tools
+  - tree-sitter
+ReleaseNotesUrl: https://github.com/usman8786/project-mind-mcp/releases/tag/v0.8.1
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

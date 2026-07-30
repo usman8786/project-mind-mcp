@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: #060a12;
+  --color-foreground: #e8eef7;
+  --color-card: #0c121c;
+  --color-card-foreground: #e8eef7;
+  --color-popover: #111827;
+  --color-popover-foreground: #e8eef7;
+  --color-primary: #2dd4bf;
+  --color-primary-foreground: #060a12;
+  --color-secondary: #111827;
+  --color-secondary-foreground: #c5d0e0;
+  --color-muted: #0c121c;
+  --color-muted-foreground: #8b9bb4;
+  --color-accent: #e8b86d;
+  --color-accent-foreground: #060a12;
+  --color-destructive: #f07178;
+  --color-destructive-foreground: #060a12;
+  --color-border: #1e2a3c66;
+  --color-input: #0c121c99;
+  --color-ring: #2dd4bf;
+  --radius: 0.85rem;
+  --color-sidebar: #0a1018;
+  --font-sans: "Sora", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Layered ink atmosphere behind app chrome */
+.app-shell {
+  background:
+    radial-gradient(ellipse 90% 60% at 10% -10%, rgba(45, 212, 191, 0.12), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 95% 5%, rgba(232, 184, 109, 0.08), transparent 50%),
+    radial-gradient(ellipse 80% 40% at 50% 110%, rgba(45, 212, 191, 0.05), transparent 45%),
+    #060a12;
+}
+
+.surface-panel {
+  background: linear-gradient(165deg, rgba(17, 24, 39, 0.92), rgba(12, 18, 28, 0.88));
+  border: 1px solid rgba(30, 42, 60, 0.55);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+}
+
+@keyframes brand-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes empty-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.97) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.anim-brand-in {
+  animation: brand-in 0.45s ease-out both;
+}
+
+.anim-empty-rise {
+  animation: empty-rise 0.5s ease-out both;
+}
+
+.anim-modal-in {
+  animation: modal-in 0.28s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-brand-in,
+  .anim-empty-rise,
+  .anim-modal-in {
+    animation: none;
+  }
+}
+
+/* ── Graph loading constellation ─────────────────────────────── */
+
+.graph-loader-node {
+  fill: #2dd4bf;
+  animation: graph-loader-pulse 2.1s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.graph-loader-edge {
+  stroke: #2dd4bf;
+  stroke-opacity: 0.35;
+  stroke-width: 1.2;
+  stroke-dasharray: 90;
+  stroke-dashoffset: 90;
+  animation: graph-loader-draw 2.1s ease-in-out infinite;
+}
+
+@keyframes graph-loader-pulse {
+  0%, 100% { opacity: 0.25; transform: scale(0.8); }
+  35% { opacity: 1; transform: scale(1.15); }
+  70% { opacity: 0.45; transform: scale(0.95); }
+}
+
+@keyframes graph-loader-draw {
+  0% { stroke-dashoffset: 90; stroke-opacity: 0; }
+  40% { stroke-dashoffset: 0; stroke-opacity: 0.5; }
+  80%, 100% { stroke-dashoffset: 0; stroke-opacity: 0.15; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .graph-loader-node,
+  .graph-loader-edge {
+    animation: none;
+  }
+  .graph-loader-node { opacity: 0.8; }
+  .graph-loader-edge { stroke-dashoffset: 0; stroke-opacity: 0.35; }
+}

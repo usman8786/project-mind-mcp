@@ -1,0 +1,16 @@
+pkgbase = project-mind-mcp
+	pkgdesc = Fast code intelligence engine for AI coding agents — single static binary MCP server
+	pkgver = 0.8.1
+	pkgrel = 1
+	url = https://github.com/usman8786/project-mind-mcp
+	arch = x86_64
+	arch = aarch64
+	license = MIT
+	provides = project-mind-mcp
+	conflicts = project-mind-mcp
+	source_x86_64 = project-mind-mcp-0.8.1-linux-amd64.tar.gz::https://github.com/usman8786/project-mind-mcp/releases/download/v0.8.1/project-mind-mcp-linux-amd64.tar.gz
+	sha256sums_x86_64 = dbd3b92ea870ef240b63059f26bda15015f76ef9978931bebc3a0f9d09470973
+	source_aarch64 = project-mind-mcp-0.8.1-linux-arm64.tar.gz::https://github.com/usman8786/project-mind-mcp/releases/download/v0.8.1/project-mind-mcp-linux-arm64.tar.gz
+	sha256sums_aarch64 = d2f842d1365da5c35d9c5796f57a821c9745267350994346735e1e6e04d46091
+
+pkgname = project-mind-mcp

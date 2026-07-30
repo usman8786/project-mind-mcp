@@ -1,0 +1,42 @@
+{
+  "name": "project-mind-mcp",
+  "version": "0.8.1",
+  "description": "Fast code intelligence engine for AI coding agents — single static binary MCP server",
+  "mcpName": "io.github.usman8786/project-mind-mcp",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/usman8786/project-mind-mcp.git"
+  },
+  "homepage": "https://github.com/usman8786/project-mind-mcp",
+  "bugs": {
+    "url": "https://github.com/usman8786/project-mind-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "claude",
+    "code-intelligence",
+    "codebase",
+    "memory",
+    "ai",
+    "llm",
+    "tree-sitter"
+  ],
+  "bin": {
+    "project-mind-mcp": "./bin.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "postinstall": "node install.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "os": ["linux", "darwin", "win32"],
+  "cpu": ["x64", "arm64"],
+  "files": [
+    "bin.js",
+    "install.js",
+    "README.md"
+  ]
+}
