@@ -11,7 +11,9 @@ permissions: read-all
 jobs:
   scorecard:
     runs-on: ubuntu-latest
+    # Job permissions replace workflow-level ones; contents:read is required for checkout.
     permissions:
+      contents: read
       security-events: write
       id-token: write
     steps:
@@ -24,8 +26,8 @@ jobs:
         with:
           results_file: results.sarif
           results_format: sarif
-          # Private repos cannot publish to the public Scorecard API.
-          publish_results: false
+          # Public repos can publish to the Scorecard API (needed for the badge).
+          publish_results: true
 
       - name: Upload SARIF results
         continue-on-error: true
