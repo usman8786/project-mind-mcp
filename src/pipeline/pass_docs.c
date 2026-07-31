@@ -82,8 +82,9 @@ static void upsert_doc_ir(pmm_pipeline_ctx_t *ctx, const pmm_doc_ir_t *doc, cons
                  esc_a, esc_h, esc_b, esc_path);
 
         const char *sname = sec->heading && sec->heading[0] ? sec->heading : sec->anchor;
-        int64_t sid = pmm_gbuf_upsert_node(ctx->gbuf, "DocSection", sname ? sname : "section",
-                                           sec_qn, doc->path, sec->start_line, sec->end_line, sprops);
+        int64_t sid =
+            pmm_gbuf_upsert_node(ctx->gbuf, "DocSection", sname ? sname : "section", sec_qn,
+                                 doc->path, sec->start_line, sec->end_line, sprops);
         if (doc_id > 0 && sid > 0) {
             pmm_gbuf_insert_edge(ctx->gbuf, doc_id, sid, "HAS_SECTION", "{}");
         }

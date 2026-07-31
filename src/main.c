@@ -1844,9 +1844,9 @@ int main(int argc, char **argv) {
             coordination_failure = main_build_identity_status_name(local_identity_status);
         }
         if (coordination_failure) {
-            (void)fprintf(
-                stderr, "project-mind-mcp: secure CLI coordination could not be created (%s)\n",
-                coordination_failure);
+            (void)fprintf(stderr,
+                          "project-mind-mcp: secure CLI coordination could not be created (%s)\n",
+                          coordination_failure);
             goto local_cli_cleanup;
         }
         pmm_http_server_set_binary_path(local_executable);
@@ -1946,9 +1946,8 @@ int main(int argc, char **argv) {
     char executable_path[MAIN_PATH_CAP];
     pmm_daemon_build_identity_t identity;
     if (!main_resolve_executable(argv[0], executable_path)) {
-        (void)fprintf(stderr,
-                      "project-mind-mcp: exact executable identity could not be verified "
-                      "(executable-path)\n");
+        (void)fprintf(stderr, "project-mind-mcp: exact executable identity could not be verified "
+                              "(executable-path)\n");
         return role == PMM_DAEMON_PROCESS_HOOK_CLIENT ? EXIT_SUCCESS : EXIT_FAILURE;
     }
     main_build_identity_status_t identity_status = main_build_identity(&identity);

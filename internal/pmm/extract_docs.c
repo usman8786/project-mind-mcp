@@ -191,7 +191,7 @@ static int parse_markdown_or_rst(pmm_doc_ir_t *doc, const char *text, int is_rst
             const char *next = eol + 1;
             const char *neol = strchr(next, '\n');
             size_t nlen = neol ? (size_t)(neol - next) : strlen(next);
-            if (llen > 0 && nlen == llen && nlen > 0) {
+            if (llen > 0 && nlen == llen) {
                 char ch = next[0];
                 int underline = (ch == '=' || ch == '-' || ch == '~' || ch == '^' || ch == '"');
                 for (size_t k = 1; underline && k < nlen; k++) {

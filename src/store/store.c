@@ -7425,9 +7425,8 @@ int pmm_store_docs_list(pmm_store_t *s, const char *project, pmm_project_doc_t *
     }
     *out = NULL;
     *count = 0;
-    const char *sql =
-        "SELECT abs_path, kind, enabled, added_at FROM project_documents "
-        "WHERE project=?1 ORDER BY added_at ASC, abs_path ASC";
+    const char *sql = "SELECT abs_path, kind, enabled, added_at FROM project_documents "
+                      "WHERE project=?1 ORDER BY added_at ASC, abs_path ASC";
     sqlite3_stmt *stmt = NULL;
     if (sqlite3_prepare_v2(s->db, sql, -1, &stmt, NULL) != SQLITE_OK) {
         store_set_error_sqlite(s, "docs_list");
@@ -7478,10 +7477,9 @@ int pmm_store_docs_attach(pmm_store_t *s, const char *project, const char *abs_p
     char now[PMM_SZ_32];
     iso_now(now, sizeof(now));
     const char *k = kind && kind[0] ? kind : "";
-    const char *sql =
-        "INSERT INTO project_documents (project, abs_path, kind, enabled, added_at) "
-        "VALUES (?1, ?2, ?3, 1, ?4) "
-        "ON CONFLICT(project, abs_path) DO UPDATE SET kind=excluded.kind, enabled=1";
+    const char *sql = "INSERT INTO project_documents (project, abs_path, kind, enabled, added_at) "
+                      "VALUES (?1, ?2, ?3, 1, ?4) "
+                      "ON CONFLICT(project, abs_path) DO UPDATE SET kind=excluded.kind, enabled=1";
     sqlite3_stmt *stmt = NULL;
     if (sqlite3_prepare_v2(s->db, sql, -1, &stmt, NULL) != SQLITE_OK) {
         store_set_error_sqlite(s, "docs_attach");

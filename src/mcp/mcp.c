@@ -654,12 +654,14 @@ static const tool_def_t TOOLS[] = {
 
     {"list_project_docs", "List project docs",
      "List attached and indexed project context documents (specs, runbooks, markdown, etc.)",
-     "{\"type\":\"object\",\"properties\":{\"project\":{\"type\":\"string\"}},\"required\":[\"project\"]}"},
+     "{\"type\":\"object\",\"properties\":{\"project\":{\"type\":\"string\"}},\"required\":["
+     "\"project\"]}"},
 
     {"attach_project_doc", "Attach project doc",
      "Attach a local file path as project context (md/txt/rst/yaml/json/docx/pdf). Rejects URLs.",
      "{\"type\":\"object\",\"properties\":{\"project\":{\"type\":\"string\"},\"path\":{\"type\":"
-     "\"string\",\"description\":\"Absolute local filesystem path\"},\"kind\":{\"type\":\"string\"}},"
+     "\"string\",\"description\":\"Absolute local filesystem "
+     "path\"},\"kind\":{\"type\":\"string\"}},"
      "\"required\":[\"project\",\"path\"]}"},
 
     {"detach_project_doc", "Detach project doc", "Remove an attached project context document path",
@@ -767,14 +769,14 @@ static void mcp_add_tool_def(yyjson_mut_doc *doc, yyjson_mut_val *tools, int i) 
 
 static bool mcp_tool_allowed(pmm_mcp_tool_profile_t profile, const char *name) {
     static const char *const analysis_tools[] = {
-        "search_graph",     "query_graph",          "trace_path",     "get_code_snippet",
-        "get_graph_schema", "get_architecture",     "search_code",    "list_projects",
-        "index_status",     "check_index_coverage", "detect_changes", "list_project_docs",
+        "search_graph",        "query_graph",          "trace_path",     "get_code_snippet",
+        "get_graph_schema",    "get_architecture",     "search_code",    "list_projects",
+        "index_status",        "check_index_coverage", "detect_changes", "list_project_docs",
         "search_project_docs", "get_project_doc",
     };
     static const char *const scout_tools[] = {
-        "search_graph",  "trace_path",   "get_code_snippet",     "get_architecture",
-        "list_projects", "index_status", "check_index_coverage", "search_project_docs",
+        "search_graph",      "trace_path",      "get_code_snippet",     "get_architecture",
+        "list_projects",     "index_status",    "check_index_coverage", "search_project_docs",
         "list_project_docs", "get_project_doc",
     };
     if (!name) {
@@ -10249,8 +10251,7 @@ static char *handle_list_project_docs(pmm_mcp_server_t *srv, const char *args) {
             yyjson_mut_obj_add_strcpy(doc, o, "path", docs[i].abs_path ? docs[i].abs_path : "");
             yyjson_mut_obj_add_strcpy(doc, o, "kind", docs[i].kind ? docs[i].kind : "");
             yyjson_mut_obj_add_bool(doc, o, "enabled", docs[i].enabled != 0);
-            yyjson_mut_obj_add_strcpy(doc, o, "added_at",
-                                      docs[i].added_at ? docs[i].added_at : "");
+            yyjson_mut_obj_add_strcpy(doc, o, "added_at", docs[i].added_at ? docs[i].added_at : "");
             yyjson_mut_arr_add_val(arr, o);
         }
         pmm_store_docs_free(docs, count);
@@ -10258,13 +10259,13 @@ static char *handle_list_project_docs(pmm_mcp_server_t *srv, const char *args) {
     /* Also list Document nodes already in the graph */
     pmm_node_t *nodes = NULL;
     int ncount = 0;
-    if (pmm_store_find_nodes_by_label(store, project, "Document", &nodes, &ncount) == PMM_STORE_OK) {
+    if (pmm_store_find_nodes_by_label(store, project, "Document", &nodes, &ncount) ==
+        PMM_STORE_OK) {
         yyjson_mut_val *indexed = yyjson_mut_arr(doc);
         for (int i = 0; i < ncount; i++) {
             yyjson_mut_val *o = yyjson_mut_obj(doc);
             yyjson_mut_obj_add_strcpy(doc, o, "name", nodes[i].name ? nodes[i].name : "");
-            yyjson_mut_obj_add_strcpy(doc, o, "path",
-                                      nodes[i].file_path ? nodes[i].file_path : "");
+            yyjson_mut_obj_add_strcpy(doc, o, "path", nodes[i].file_path ? nodes[i].file_path : "");
             yyjson_mut_obj_add_strcpy(doc, o, "qualified_name",
                                       nodes[i].qualified_name ? nodes[i].qualified_name : "");
             yyjson_mut_arr_add_val(indexed, o);
@@ -10416,7 +10417,8 @@ static char *handle_search_project_docs(pmm_mcp_server_t *srv, const char *args)
     }
     /* fallback: Document titles */
     if (yyjson_mut_arr_size(hits) == 0 &&
-        pmm_store_find_nodes_by_label(store, project, "Document", &nodes, &ncount) == PMM_STORE_OK) {
+        pmm_store_find_nodes_by_label(store, project, "Document", &nodes, &ncount) ==
+            PMM_STORE_OK) {
         int added = 0;
         for (int i = 0; i < ncount && added < limit; i++) {
             const char *name = nodes[i].name ? nodes[i].name : "";
