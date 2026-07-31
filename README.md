@@ -65,6 +65,36 @@ Unblock-File .\install.ps1
 
 Options: `--ui` (graph visualization), `--skip-config` (binary only, no agent setup), `--dir=<path>` (custom location).
 
+<details>
+<summary>Windows + WSL (projects on both Windows and Ubuntu)</summary>
+
+If you use **Cursor/VS Code on Windows** but keep some repos in **WSL Ubuntu** and others under `C:\…`, install **once inside WSL** (not both installers). One Linux binary can index both trees.
+
+1. In a WSL Ubuntu terminal:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/usman8786/project-mind-mcp/main/install.sh | bash
+   # with UI:
+   curl -fsSL https://raw.githubusercontent.com/usman8786/project-mind-mcp/main/install.sh | bash -s -- --ui
+   ```
+
+2. Point your Windows agent MCP at the WSL binary (adjust the username/path if needed):
+
+   ```json
+   "project-mind-mcp": {
+     "command": "wsl.exe",
+     "args": ["-e", "/home/YOUR_USER/.local/bin/project-mind-mcp"]
+   }
+   ```
+
+3. Index paths from the Linux side:
+   - Windows projects → `/mnt/c/Users/…`
+   - WSL projects → `/home/YOUR_USER/…`
+
+Do **not** run `install.ps1` and `install.sh` as two active MCP servers at the same time — they conflict on the exact-build admission barrier. Prefer WSL-only for this hybrid setup; use `install.ps1` only if all of your work stays on native Windows paths.
+
+</details>
+
 Restart your coding agent. Say **"Index this project"** — done.
 
 <details>
