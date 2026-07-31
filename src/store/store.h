@@ -718,6 +718,21 @@ int pmm_adr_validate_content(const char *content, char *errbuf, int errbuf_size)
 int pmm_adr_validate_section_keys(const char **keys, int count, char *errbuf, int errbuf_size);
 void pmm_adr_sections_free(pmm_adr_sections_t *s);
 
+/* ── Project documents (attached context files) ─────────────────── */
+
+typedef struct {
+    char *abs_path;
+    char *kind;
+    int enabled;
+    char *added_at;
+} pmm_project_doc_t;
+
+int pmm_store_docs_list(pmm_store_t *s, const char *project, pmm_project_doc_t **out, int *count);
+int pmm_store_docs_attach(pmm_store_t *s, const char *project, const char *abs_path,
+                          const char *kind);
+int pmm_store_docs_detach(pmm_store_t *s, const char *project, const char *abs_path);
+void pmm_store_docs_free(pmm_project_doc_t *docs, int count);
+
 /* ── Search helpers (exposed for testing) ───────────────────────── */
 
 /* Convert a glob pattern to SQL LIKE pattern. Caller must free result. */

@@ -66,6 +66,13 @@ export const messages = {
       title: "Architecture Decision Record",
       lastUpdated: "Last updated",
     },
+    docs: {
+      title: "Project documents",
+      add: "Attach path",
+      empty: "No attached documents yet",
+      pathPlaceholder: "/absolute/path/to/spec.md",
+      hint: "Local md/txt/rst/yaml/json/docx/pdf — re-index after attach",
+    },
     control: {
       panel: "Control Panel",
       totalCpu: "Total CPU",
@@ -142,6 +149,13 @@ export const messages = {
     adr: {
       title: "架构决策记录",
       lastUpdated: "最后更新",
+    },
+    docs: {
+      title: "项目文档",
+      add: "附加路径",
+      empty: "尚无附加文档",
+      pathPlaceholder: "/absolute/path/to/spec.md",
+      hint: "本地 md/txt/rst/yaml/json/docx/pdf — 附加后请重新索引",
     },
     control: {
       panel: "控制面板",

@@ -1,0 +1,9 @@
+{
+  "name": "demo-contract",
+  "routes": {
+    "/v1/users": {
+      "method": "GET",
+      "description": "List users"
+    }
+  }
+}

@@ -303,6 +303,17 @@ static int init_schema(pmm_store_t *s) {
         "  ignored_files_total INTEGER NOT NULL DEFAULT 0,"
         "  coverage_version INTEGER NOT NULL DEFAULT 1,"
         "  hash_records_complete INTEGER NOT NULL DEFAULT 0"
+        ");"
+        /* Attached project context documents (specs/runbooks outside or beside
+         * the repo). Paths are absolute local files; no FK so attach works
+         * before the first full index creates a projects row. */
+        "CREATE TABLE IF NOT EXISTS project_documents ("
+        "  project TEXT NOT NULL,"
+        "  abs_path TEXT NOT NULL,"
+        "  kind TEXT NOT NULL DEFAULT '',"
+        "  enabled INTEGER NOT NULL DEFAULT 1,"
+        "  added_at TEXT NOT NULL,"
+        "  PRIMARY KEY (project, abs_path)"
         ");";
 
     int rc = exec_sql(s, ddl);
@@ -7406,6 +7417,112 @@ int pmm_store_adr_update_sections(pmm_store_t *s, const char *project, const cha
     }
 
     return pmm_store_adr_get(s, project, out);
+}
+
+int pmm_store_docs_list(pmm_store_t *s, const char *project, pmm_project_doc_t **out, int *count) {
+    if (!s || !project || !out || !count) {
+        return PMM_STORE_ERR;
+    }
+    *out = NULL;
+    *count = 0;
+    const char *sql =
+        "SELECT abs_path, kind, enabled, added_at FROM project_documents "
+        "WHERE project=?1 ORDER BY added_at ASC, abs_path ASC";
+    sqlite3_stmt *stmt = NULL;
+    if (sqlite3_prepare_v2(s->db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        store_set_error_sqlite(s, "docs_list");
+        return PMM_STORE_ERR;
+    }
+    bind_text(stmt, 1, project);
+    pmm_project_doc_t *arr = NULL;
+    int n = 0;
+    int cap = 0;
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        if (n >= cap) {
+            int nc = cap ? cap * 2 : 8;
+            pmm_project_doc_t *grown = realloc(arr, (size_t)nc * sizeof(*grown));
+            if (!grown) {
+                sqlite3_finalize(stmt);
+                pmm_store_docs_free(arr, n);
+                return PMM_STORE_ERR;
+            }
+            arr = grown;
+            cap = nc;
+        }
+        memset(&arr[n], 0, sizeof(arr[n]));
+        const char *path = (const char *)sqlite3_column_text(stmt, 0);
+        const char *kind = (const char *)sqlite3_column_text(stmt, 1);
+        const char *added = (const char *)sqlite3_column_text(stmt, 3);
+        arr[n].abs_path = path ? strdup(path) : NULL;
+        arr[n].kind = kind ? strdup(kind) : strdup("");
+        arr[n].enabled = sqlite3_column_int(stmt, 2);
+        arr[n].added_at = added ? strdup(added) : NULL;
+        if (!arr[n].abs_path || !arr[n].kind) {
+            sqlite3_finalize(stmt);
+            pmm_store_docs_free(arr, n + 1);
+            return PMM_STORE_ERR;
+        }
+        n++;
+    }
+    sqlite3_finalize(stmt);
+    *out = arr;
+    *count = n;
+    return PMM_STORE_OK;
+}
+
+int pmm_store_docs_attach(pmm_store_t *s, const char *project, const char *abs_path,
+                          const char *kind) {
+    if (!s || !project || !abs_path || !abs_path[0]) {
+        return PMM_STORE_ERR;
+    }
+    char now[PMM_SZ_32];
+    iso_now(now, sizeof(now));
+    const char *k = kind && kind[0] ? kind : "";
+    const char *sql =
+        "INSERT INTO project_documents (project, abs_path, kind, enabled, added_at) "
+        "VALUES (?1, ?2, ?3, 1, ?4) "
+        "ON CONFLICT(project, abs_path) DO UPDATE SET kind=excluded.kind, enabled=1";
+    sqlite3_stmt *stmt = NULL;
+    if (sqlite3_prepare_v2(s->db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        store_set_error_sqlite(s, "docs_attach");
+        return PMM_STORE_ERR;
+    }
+    bind_text(stmt, 1, project);
+    bind_text(stmt, 2, abs_path);
+    bind_text(stmt, 3, k);
+    bind_text(stmt, 4, now);
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return (rc == SQLITE_DONE) ? PMM_STORE_OK : PMM_STORE_ERR;
+}
+
+int pmm_store_docs_detach(pmm_store_t *s, const char *project, const char *abs_path) {
+    if (!s || !project || !abs_path) {
+        return PMM_STORE_ERR;
+    }
+    const char *sql = "DELETE FROM project_documents WHERE project=?1 AND abs_path=?2";
+    sqlite3_stmt *stmt = NULL;
+    if (sqlite3_prepare_v2(s->db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        store_set_error_sqlite(s, "docs_detach");
+        return PMM_STORE_ERR;
+    }
+    bind_text(stmt, 1, project);
+    bind_text(stmt, 2, abs_path);
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return (rc == SQLITE_DONE) ? PMM_STORE_OK : PMM_STORE_ERR;
+}
+
+void pmm_store_docs_free(pmm_project_doc_t *docs, int count) {
+    if (!docs) {
+        return;
+    }
+    for (int i = 0; i < count; i++) {
+        free(docs[i].abs_path);
+        free(docs[i].kind);
+        free(docs[i].added_at);
+    }
+    free(docs);
 }
 
 void pmm_store_adr_free(pmm_adr_t *adr) {

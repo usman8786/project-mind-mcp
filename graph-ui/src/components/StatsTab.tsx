@@ -49,6 +49,122 @@ function displayName(project: Project): string {
   return parts[parts.length - 1] || project.name;
 }
 
+/* ── Documents button + modal ───────────────────────────── */
+
+function DocsButton({ project }: { project: string }) {
+  const t = useUiMessages();
+  const [open, setOpen] = useState(false);
+  const [docs, setDocs] = useState<{ path: string; kind: string }[]>([]);
+  const [path, setPath] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/docs?project=${encodeURIComponent(project)}`);
+      const data = await res.json();
+      setDocs(Array.isArray(data.docs) ? data.docs : []);
+    } catch {
+      setDocs([]);
+    }
+  }, [project]);
+
+  useEffect(() => {
+    if (open) refresh();
+  }, [open, refresh]);
+
+  const attach = async () => {
+    if (!path.trim()) return;
+    setBusy(true);
+    try {
+      await fetch("/api/docs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project, path: path.trim(), op: "attach" }),
+      });
+      setPath("");
+      await refresh();
+    } catch { /* ignore */ }
+    finally { setBusy(false); }
+  };
+
+  const detach = async (p: string) => {
+    setBusy(true);
+    try {
+      await fetch("/api/docs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project, path: p, op: "detach" }),
+      });
+      await refresh();
+    } catch { /* ignore */ }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all bg-white/[0.03] text-muted-foreground/60 hover:text-muted-foreground hover:bg-white/[0.06]"
+      >
+        Docs
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setOpen(false)}>
+          <div className="absolute inset-0 bg-black/65 backdrop-blur-sm" />
+          <div
+            className="anim-modal-in relative surface-panel rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-[15px] font-semibold text-foreground">{t.docs.title}</h3>
+                <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{project}</p>
+              </div>
+              <button onClick={() => setOpen(false)} className="text-muted-foreground/40 hover:text-foreground text-[16px] p-1">×</button>
+            </div>
+            <p className="text-[11px] text-muted-foreground mb-3">{t.docs.hint}</p>
+            <div className="flex gap-2 mb-4">
+              <input
+                value={path}
+                onChange={(e) => setPath(e.target.value)}
+                placeholder={t.docs.pathPlaceholder}
+                className="flex-1 bg-background/60 border border-border/50 rounded-xl px-3 py-2 text-[12px] text-foreground font-mono outline-none focus:border-primary/40"
+              />
+              <button
+                onClick={attach}
+                disabled={busy}
+                className="px-3 py-2 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary text-[12px] font-medium disabled:opacity-30"
+              >
+                {t.docs.add}
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto space-y-2 min-h-[120px]">
+              {docs.length === 0 && (
+                <p className="text-[12px] text-muted-foreground/70">{t.docs.empty}</p>
+              )}
+              {docs.map((d) => (
+                <div key={d.path} className="flex items-center justify-between gap-2 rounded-lg border border-border/40 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-mono text-foreground truncate">{d.path}</p>
+                    {d.kind && <p className="text-[10px] text-muted-foreground">{d.kind}</p>}
+                  </div>
+                  <button
+                    onClick={() => detach(d.path)}
+                    disabled={busy}
+                    className="text-[11px] text-destructive/70 hover:text-destructive"
+                  >
+                    {t.common.delete}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 /* ── Glowy health dot ───────────────────────────────────── */
 
 function HealthDot({ name }: { name: string }) {
@@ -659,6 +775,7 @@ export function StatsTab({ onSelectProject }: StatsTabProps) {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <AdrButton project={p.project.name} />
+                    <DocsButton project={p.project.name} />
                     <button
                       onClick={() => onSelectProject(p.project.name)}
                       className="px-3 py-1.5 rounded-lg bg-primary/15 hover:bg-primary/25 text-primary text-[12px] font-semibold transition-all"

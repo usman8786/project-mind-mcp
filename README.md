@@ -12,7 +12,7 @@
 
 **Project Mind** is a code intelligence MCP server that indexes repositories into a persistent knowledge graph for AI coding agents. Full-indexes an average repository in milliseconds. Answers structural queries in under 1ms. Ships as a single static binary for macOS, Linux, and Windows.
 
-High-quality parsing through [tree-sitter](https://tree-sitter.github.io/tree-sitter/) AST analysis across all 158 languages, enhanced with [**Hybrid LSP** semantic type resolution](#hybrid-lsp) for Python, TypeScript / JavaScript / JSX / TSX, PHP, C#, Go, C, C++, Java, Kotlin, Rust, and Perl — producing a persistent knowledge graph of functions, classes, call chains, HTTP routes, and cross-service links. 15 MCP tools. Zero dependencies. Plug and play across 43 supported automatic/conditional client surfaces.
+High-quality parsing through [tree-sitter](https://tree-sitter.github.io/tree-sitter/) AST analysis across all 158 languages, enhanced with [**Hybrid LSP** semantic type resolution](#hybrid-lsp) for Python, TypeScript / JavaScript / JSX / TSX, PHP, C#, Go, C, C++, Java, Kotlin, Rust, and Perl — producing a persistent knowledge graph of functions, classes, call chains, HTTP routes, and cross-service links. 20 MCP tools. Zero dependencies. Plug and play across 43 supported automatic/conditional client surfaces.
 
 > **Security & Trust** — This tool reads your codebase and writes to your agent configuration files. All processing happens 100% locally; your code never leaves your machine. Found a security issue? See [SECURITY.md](SECURITY.md).
 
@@ -31,7 +31,7 @@ High-quality parsing through [tree-sitter](https://tree-sitter.github.io/tree-si
 - **43 supported automatic/conditional client surfaces** — `install` configures detected clients and safely activates conditional clients only when their documented platform, marker, or explicit existing config path is present. See [Multi-Agent Support](#multi-agent-support) for the complete matrix and manual/UI-only boundaries.
 - **Built-in graph visualization** — 3D interactive UI at `localhost:9749` (optional UI binary variant).
 - **Infrastructure-as-code indexing** — Dockerfiles, Kubernetes manifests, and Kustomize overlays indexed as graph nodes with cross-references. `Resource` nodes for K8s kinds, `Module` nodes for Kustomize overlays with `IMPORTS` edges to referenced resources.
-- **15 MCP tools** — search, trace, architecture, impact analysis, targeted index-coverage checks, Cypher queries, dead code detection, cross-service HTTP linking, ADR management, and more.
+- **20 MCP tools** — search, trace, architecture, impact analysis, targeted index-coverage checks, Cypher queries, dead code detection, cross-service HTTP linking, ADR management, project document context, and more.
 
 ## Quick Start
 
@@ -214,6 +214,7 @@ The install script placed beside the binary is **reported, not deleted** — uni
 ### Graph & analysis
 - **Architecture overview**: `get_architecture` returns languages, packages, entry points, routes, hotspots, boundaries, layers, and clusters in a single call
 - **Architecture Decision Records**: `manage_adr` persists architectural decisions across sessions
+- **Project document context**: index in-repo docs (`docs/**`, README, md/txt/rst) plus attached local paths (yaml/json/docx/pdf); retrieve with `search_project_docs` / `get_project_doc` / `attach_project_doc`. PDF text is best-effort (literal PDF strings only; no OCR for scans).
 - **Louvain community detection**: Discovers functional modules by clustering call edges
 - **Git diff impact mapping**: `detect_changes` maps uncommitted changes to affected symbols with risk classification
 - **Call graph**: Resolves function calls across files and packages (import-aware, type-inferred)
@@ -641,6 +642,10 @@ JSON arguments can also be piped on stdin. Inline JSON remains accepted for back
 | `get_architecture` | Codebase overview: languages, packages, routes, hotspots, clusters, ADR. |
 | `search_code` | Grep-like text search within indexed project files. |
 | `manage_adr` | CRUD for Architecture Decision Records. |
+| `list_project_docs` | List attached + indexed Document nodes. |
+| `attach_project_doc` / `detach_project_doc` | Register or remove a local context file path. |
+| `search_project_docs` | Keyword search over DocSection / Document nodes. |
+| `get_project_doc` | Fetch a document or section by path/anchor. |
 | `ingest_traces` | Ingest runtime traces to validate HTTP_CALLS edges. |
 
 ## Graph Data Model

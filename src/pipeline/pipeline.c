@@ -1514,6 +1514,13 @@ static int run_post_extraction(pmm_pipeline_t *p, pmm_pipeline_ctx_t *ctx,
     }
 
     PMM_PROF_START(t_predump);
+    {
+        struct timespec t_docs;
+        pmm_clock_gettime(CLOCK_MONOTONIC, &t_docs);
+        pmm_pipeline_pass_docs(ctx, files, file_count);
+        pmm_log_info("pass.timing", "pass", "docs", "elapsed_ms",
+                     itoa_buf((int)elapsed_ms(t_docs)));
+    }
     run_predump_passes(p, ctx);
     PMM_PROF_END("pipeline", "3_predump_passes_total", t_predump);
 

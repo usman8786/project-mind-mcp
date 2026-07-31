@@ -178,6 +178,11 @@ static const ext_entry_t EXT_TABLE[] = {
     /* Markdown */
     {".md", PMM_LANG_MARKDOWN},
     {".mdx", PMM_LANG_MARKDOWN},
+    /* Plain / office context docs (discovered as markdown lane; pass_docs classifies) */
+    {".txt", PMM_LANG_MARKDOWN},
+    {".text", PMM_LANG_MARKDOWN},
+    {".pdf", PMM_LANG_MARKDOWN},
+    {".docx", PMM_LANG_MARKDOWN},
 
     /* MATLAB */
     {".m", PMM_LANG_MATLAB},

@@ -607,6 +607,10 @@ static void run_postpasses(pmm_pipeline_ctx_t *ctx, pmm_file_info_t *changed_fil
     struct timespec t;
 
     pmm_clock_gettime(CLOCK_MONOTONIC, &t);
+    pmm_pipeline_pass_docs(ctx, changed_files, ci);
+    pmm_log_info("pass.timing", "pass", "incr_docs", "elapsed_ms", itoa_buf((int)elapsed_ms(t)));
+
+    pmm_clock_gettime(CLOCK_MONOTONIC, &t);
     pmm_pipeline_pass_tests(ctx, changed_files, ci);
     pmm_log_info("pass.timing", "pass", "incr_tests", "elapsed_ms", itoa_buf((int)elapsed_ms(t)));
 

@@ -610,6 +610,9 @@ int pmm_pipeline_pass_semantic_edges(pmm_pipeline_ctx_t *ctx);
  * cycles (recursive). Runs on the graph buffer before the dump. */
 void pmm_pipeline_pass_complexity(pmm_pipeline_ctx_t *ctx);
 
+/* Project context documents → Document / DocSection graph nodes. */
+int pmm_pipeline_pass_docs(pmm_pipeline_ctx_t *ctx, const pmm_file_info_t *files, int file_count);
+
 /* ── Env URL scanner (pass_envscan.c) ────────────────────────────── */
 
 typedef struct {

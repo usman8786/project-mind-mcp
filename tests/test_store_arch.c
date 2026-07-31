@@ -877,6 +877,54 @@ TEST(adr_validate_keys_empty) {
     PASS();
 }
 
+/* ── Project documents attach/detach ─────────────────────────────── */
+
+TEST(project_docs_attach_list_detach) {
+    pmm_store_t *s = pmm_store_open_memory();
+    ASSERT_NOT_NULL(s);
+    ASSERT_EQ(pmm_store_upsert_project(s, "test", "/tmp/test"), PMM_STORE_OK);
+
+    ASSERT_EQ(pmm_store_docs_attach(s, "test", "/tmp/specs/api.md", "md"), PMM_STORE_OK);
+    ASSERT_EQ(pmm_store_docs_attach(s, "test", "/tmp/specs/runbook.txt", "txt"), PMM_STORE_OK);
+
+    pmm_project_doc_t *docs = NULL;
+    int count = 0;
+    ASSERT_EQ(pmm_store_docs_list(s, "test", &docs, &count), PMM_STORE_OK);
+    ASSERT_EQ(count, 2);
+    ASSERT_NOT_NULL(docs);
+    ASSERT_TRUE(docs[0].abs_path && docs[0].abs_path[0]);
+    ASSERT_TRUE(docs[0].enabled != 0);
+
+    /* re-attach same path upserts */
+    ASSERT_EQ(pmm_store_docs_attach(s, "test", "/tmp/specs/api.md", "md"), PMM_STORE_OK);
+    pmm_store_docs_free(docs, count);
+    docs = NULL;
+    count = 0;
+    ASSERT_EQ(pmm_store_docs_list(s, "test", &docs, &count), PMM_STORE_OK);
+    ASSERT_EQ(count, 2);
+
+    ASSERT_EQ(pmm_store_docs_detach(s, "test", "/tmp/specs/api.md"), PMM_STORE_OK);
+    pmm_store_docs_free(docs, count);
+    docs = NULL;
+    count = 0;
+    ASSERT_EQ(pmm_store_docs_list(s, "test", &docs, &count), PMM_STORE_OK);
+    ASSERT_EQ(count, 1);
+    ASSERT_STR_EQ(docs[0].abs_path, "/tmp/specs/runbook.txt");
+
+    pmm_store_docs_free(docs, count);
+    pmm_store_close(s);
+    PASS();
+}
+
+TEST(project_docs_reject_empty_path) {
+    pmm_store_t *s = pmm_store_open_memory();
+    ASSERT_NOT_NULL(s);
+    ASSERT_TRUE(pmm_store_docs_attach(s, "test", "", "md") != PMM_STORE_OK);
+    ASSERT_TRUE(pmm_store_docs_attach(s, "test", NULL, "md") != PMM_STORE_OK);
+    pmm_store_close(s);
+    PASS();
+}
+
 /* ── Louvain tests ──────────────────────────────────────────────── */
 
 TEST(louvain_basic) {
@@ -1403,6 +1451,8 @@ SUITE(store_arch) {
     RUN_TEST(adr_validate_keys_valid);
     RUN_TEST(adr_validate_keys_invalid);
     RUN_TEST(adr_validate_keys_empty);
+    RUN_TEST(project_docs_attach_list_detach);
+    RUN_TEST(project_docs_reject_empty_path);
 
     /* Louvain */
     RUN_TEST(louvain_basic);

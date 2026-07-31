@@ -852,6 +852,112 @@ static void handle_adr_save(pmm_http_server_t *srv, pmm_http_conn_t *c, const pm
     }
 }
 
+/* GET /api/docs?project=X — list attached docs */
+static void handle_docs_list(pmm_http_conn_t *c, const pmm_http_req_t *req) {
+    char name[256] = {0};
+    if (!pmm_http_query_param(req->query, "project", name, (int)sizeof(name)) || name[0] == '\0') {
+        pmm_http_replyf(c, 400, g_cors_json, "{\"error\":\"missing project\"}");
+        return;
+    }
+    char db_path[1024];
+    db_path_for_project(name, db_path, sizeof(db_path));
+    pmm_store_t *store = pmm_store_open_path_query(db_path);
+    if (!store) {
+        pmm_http_replyf(c, 200, g_cors_json, "{\"docs\":[]}");
+        return;
+    }
+    pmm_project_doc_t *docs = NULL;
+    int count = 0;
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = yyjson_mut_obj(doc);
+    yyjson_mut_doc_set_root(doc, root);
+    yyjson_mut_val *arr = yyjson_mut_arr(doc);
+    if (pmm_store_docs_list(store, name, &docs, &count) == PMM_STORE_OK) {
+        for (int i = 0; i < count; i++) {
+            yyjson_mut_val *o = yyjson_mut_obj(doc);
+            yyjson_mut_obj_add_strcpy(doc, o, "path", docs[i].abs_path ? docs[i].abs_path : "");
+            yyjson_mut_obj_add_strcpy(doc, o, "kind", docs[i].kind ? docs[i].kind : "");
+            yyjson_mut_obj_add_bool(doc, o, "enabled", docs[i].enabled != 0);
+            yyjson_mut_arr_add_val(arr, o);
+        }
+        pmm_store_docs_free(docs, count);
+    }
+    yyjson_mut_obj_add_val(doc, root, "docs", arr);
+    char *out = yyjson_mut_write(doc, 0, NULL);
+    yyjson_mut_doc_free(doc);
+    pmm_store_close(store);
+    pmm_http_replyf(c, 200, g_cors_json, "%s", out ? out : "{\"docs\":[]}");
+    free(out);
+}
+
+/* POST /api/docs — attach or detach {project, path, op?, kind?} */
+static void handle_docs_mutate(pmm_http_server_t *srv, pmm_http_conn_t *c,
+                               const pmm_http_req_t *req) {
+    if (req->body_len == 0 || req->body_len > 16384) {
+        pmm_http_replyf(c, 400, g_cors_json, "{\"error\":\"invalid body\"}");
+        return;
+    }
+    yyjson_doc *jdoc = yyjson_read(req->body, req->body_len, 0);
+    if (!jdoc) {
+        pmm_http_replyf(c, 400, g_cors_json, "{\"error\":\"invalid json\"}");
+        return;
+    }
+    yyjson_val *root = yyjson_doc_get_root(jdoc);
+    yyjson_val *v_proj = yyjson_obj_get(root, "project");
+    yyjson_val *v_path = yyjson_obj_get(root, "path");
+    yyjson_val *v_op = yyjson_obj_get(root, "op");
+    yyjson_val *v_kind = yyjson_obj_get(root, "kind");
+    if (!v_proj || !yyjson_is_str(v_proj) || !v_path || !yyjson_is_str(v_path)) {
+        yyjson_doc_free(jdoc);
+        pmm_http_replyf(c, 400, g_cors_json, "{\"error\":\"missing project or path\"}");
+        return;
+    }
+    const char *proj = yyjson_get_str(v_proj);
+    const char *path = yyjson_get_str(v_path);
+    const char *op = v_op && yyjson_is_str(v_op) ? yyjson_get_str(v_op) : "attach";
+    const char *kind = v_kind && yyjson_is_str(v_kind) ? yyjson_get_str(v_kind) : "";
+
+    if (strncmp(path, "http://", 7) == 0 || strncmp(path, "https://", 8) == 0) {
+        yyjson_doc_free(jdoc);
+        pmm_http_replyf(c, 400, g_cors_json, "{\"error\":\"URLs not allowed\"}");
+        return;
+    }
+
+    if (srv->mutation_begin && !srv->mutation_begin(srv->mutation_context, proj)) {
+        yyjson_doc_free(jdoc);
+        pmm_http_replyf(c, 423, g_cors_json, "{\"error\":\"project is busy\"}");
+        return;
+    }
+    bool mutation_held = srv->mutation_begin != NULL;
+    char db_path[1024];
+    db_path_for_project(proj, db_path, sizeof(db_path));
+    pmm_store_t *store = pmm_store_open_path(db_path);
+    if (!store) {
+        if (mutation_held) {
+            srv->mutation_end(srv->mutation_context, proj);
+        }
+        yyjson_doc_free(jdoc);
+        pmm_http_replyf(c, 500, g_cors_json, "{\"error\":\"cannot open store\"}");
+        return;
+    }
+    int rc = PMM_STORE_ERR;
+    if (strcmp(op, "detach") == 0) {
+        rc = pmm_store_docs_detach(store, proj, path);
+    } else {
+        rc = pmm_store_docs_attach(store, proj, path, kind);
+    }
+    pmm_store_close(store);
+    if (mutation_held) {
+        srv->mutation_end(srv->mutation_context, proj);
+    }
+    yyjson_doc_free(jdoc);
+    if (rc == PMM_STORE_OK) {
+        pmm_http_replyf(c, 200, g_cors_json, "{\"ok\":true}");
+    } else {
+        pmm_http_replyf(c, 500, g_cors_json, "{\"error\":\"mutation failed\"}");
+    }
+}
+
 /* ── Background indexing ──────────────────────────────────────── */
 
 static char g_binary_path[1024] = {0};
@@ -1756,6 +1862,18 @@ static void dispatch_request(pmm_http_server_t *srv, pmm_http_conn_t *c,
     /* POST /api/adr → save ADR for project */
     if (is_post && pmm_http_path_match(req->path, "/api/adr")) {
         handle_adr_save(srv, c, req);
+        return;
+    }
+
+    /* GET /api/docs → list attached documents */
+    if (is_get && pmm_http_path_match(req->path, "/api/docs*")) {
+        handle_docs_list(c, req);
+        return;
+    }
+
+    /* POST /api/docs → attach or detach document */
+    if (is_post && pmm_http_path_match(req->path, "/api/docs")) {
+        handle_docs_mutate(srv, c, req);
         return;
     }
 

@@ -188,9 +188,10 @@ if [ "$CHECKSUM_BYTES" -gt 1048576 ]; then
     echo "error: checksums.txt exceeds the 1 MiB safety limit" >&2
     exit 1
 fi
-awk -v archive="$ARCHIVE" \
+# Strip CR so Windows-authored checksums.txt (CRLF) still matches archive names.
+tr -d '\r' < "$DLDIR/checksums.txt" | awk -v archive="$ARCHIVE" \
     '$2 == archive || $2 == "*" archive { print $1 }' \
-    "$DLDIR/checksums.txt" > "$DLDIR/matching-checksums.txt"
+    > "$DLDIR/matching-checksums.txt"
 EXPECTED=""
 while IFS= read -r digest; do
     case "$digest" in

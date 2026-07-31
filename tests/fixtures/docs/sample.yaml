@@ -1,0 +1,7 @@
+openapi: 3.0.0
+info:
+  title: Demo API
+paths:
+  /health:
+    get:
+      summary: Health check

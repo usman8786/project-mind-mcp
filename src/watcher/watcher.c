@@ -1140,6 +1140,39 @@ static bool check_changes(pmm_watcher_t *w, project_state_t *s, bool *changed_ou
     if (sig != s->last_dirty_sig) {
         changed = true;
     }
+    /* Fold attached project documents (outside the git tree) into the dirty
+     * signature so edits to specs/runbooks trigger reindex. */
+    {
+        char db_path[1024];
+        const char *cache = pmm_resolve_cache_dir();
+        if (cache && s->project_name) {
+            snprintf(db_path, sizeof(db_path), "%s/%s.db", cache, s->project_name);
+            pmm_store_t *store = pmm_store_open_path_query(db_path);
+            if (store) {
+                pmm_project_doc_t *docs = NULL;
+                int dcount = 0;
+                if (pmm_store_docs_list(store, s->project_name, &docs, &dcount) == PMM_STORE_OK) {
+                    for (int di = 0; di < dcount; di++) {
+                        if (!docs[di].enabled || !docs[di].abs_path) {
+                            continue;
+                        }
+                        struct stat st;
+                        if (stat(docs[di].abs_path, &st) == 0) {
+                            uint64_t piece = ((uint64_t)st.st_mtime << 16) ^ (uint64_t)st.st_size;
+                            sig ^= piece + (uint64_t)(di + 1) * 0x9e3779b97f4a7c15ULL;
+                        } else {
+                            sig ^= 0xDEADBEEFULL + (uint64_t)di;
+                        }
+                    }
+                    pmm_store_docs_free(docs, dcount);
+                }
+                pmm_store_close(store);
+            }
+        }
+    }
+    if (sig != s->last_dirty_sig) {
+        changed = true;
+    }
     s->pending_dirty_sig = sig;
 
     *changed_out = changed;

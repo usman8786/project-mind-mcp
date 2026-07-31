@@ -652,6 +652,33 @@ static const tool_def_t TOOLS[] = {
      "\"sections\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"required\":[\"project\"]"
      "}"},
 
+    {"list_project_docs", "List project docs",
+     "List attached and indexed project context documents (specs, runbooks, markdown, etc.)",
+     "{\"type\":\"object\",\"properties\":{\"project\":{\"type\":\"string\"}},\"required\":[\"project\"]}"},
+
+    {"attach_project_doc", "Attach project doc",
+     "Attach a local file path as project context (md/txt/rst/yaml/json/docx/pdf). Rejects URLs.",
+     "{\"type\":\"object\",\"properties\":{\"project\":{\"type\":\"string\"},\"path\":{\"type\":"
+     "\"string\",\"description\":\"Absolute local filesystem path\"},\"kind\":{\"type\":\"string\"}},"
+     "\"required\":[\"project\",\"path\"]}"},
+
+    {"detach_project_doc", "Detach project doc", "Remove an attached project context document path",
+     "{\"type\":\"object\",\"properties\":{\"project\":{\"type\":\"string\"},\"path\":{\"type\":"
+     "\"string\"}},\"required\":[\"project\",\"path\"]}"},
+
+    {"search_project_docs", "Search project docs",
+     "Keyword search over Document/DocSection nodes (md/txt/rst/yaml/json/docx/pdf). "
+     "PDF text is best-effort (literal strings only; scanned/OCR PDFs yield little).",
+     "{\"type\":\"object\",\"properties\":{\"project\":{\"type\":\"string\"},\"query\":{\"type\":"
+     "\"string\"},\"limit\":{\"type\":\"integer\",\"default\":20}},\"required\":[\"project\","
+     "\"query\"]}"},
+
+    {"get_project_doc", "Get project doc",
+     "Fetch a Document or DocSection by path and optional section anchor. "
+     "PDF content quality depends on extractable text streams (no OCR).",
+     "{\"type\":\"object\",\"properties\":{\"project\":{\"type\":\"string\"},\"path\":{\"type\":"
+     "\"string\"},\"anchor\":{\"type\":\"string\"}},\"required\":[\"project\",\"path\"]}"},
+
     {"ingest_traces", "Ingest traces", "Ingest runtime traces to enhance the knowledge graph",
      "{\"type\":\"object\",\"properties\":{\"traces\":{\"type\":\"array\",\"items\":{\"type\":"
      "\"object\",\"properties\":{\"caller\":{\"type\":\"string\"},\"callee\":{\"type\":\"string\"},"
@@ -688,6 +715,11 @@ static const tool_annotation_def_t TOOL_ANNOTATIONS[] = {
     {"check_index_coverage", false, true, true, false},
     {"detect_changes", false, true, true, false},
     {"manage_adr", false, true, false, false},
+    {"list_project_docs", true, false, true, false},
+    {"attach_project_doc", false, false, true, false},
+    {"detach_project_doc", false, true, true, false},
+    {"search_project_docs", true, false, true, false},
+    {"get_project_doc", true, false, true, false},
     {"ingest_traces", false, false, false, false},
 };
 
@@ -737,11 +769,13 @@ static bool mcp_tool_allowed(pmm_mcp_tool_profile_t profile, const char *name) {
     static const char *const analysis_tools[] = {
         "search_graph",     "query_graph",          "trace_path",     "get_code_snippet",
         "get_graph_schema", "get_architecture",     "search_code",    "list_projects",
-        "index_status",     "check_index_coverage", "detect_changes",
+        "index_status",     "check_index_coverage", "detect_changes", "list_project_docs",
+        "search_project_docs", "get_project_doc",
     };
     static const char *const scout_tools[] = {
         "search_graph",  "trace_path",   "get_code_snippet",     "get_architecture",
-        "list_projects", "index_status", "check_index_coverage",
+        "list_projects", "index_status", "check_index_coverage", "search_project_docs",
+        "list_project_docs", "get_project_doc",
     };
     if (!name) {
         return false;
@@ -10184,6 +10218,286 @@ static char *handle_detect_changes(pmm_mcp_server_t *srv, const char *args) {
     return result;
 }
 
+/* ── Project documents ─────────────────────────────────────────── */
+
+static int path_is_url(const char *path) {
+    return path && (strncmp(path, "http://", 7) == 0 || strncmp(path, "https://", 8) == 0 ||
+                    strncmp(path, "file://", 7) == 0);
+}
+
+static char *handle_list_project_docs(pmm_mcp_server_t *srv, const char *args) {
+    char *project = get_project_arg(args);
+    if (!project) {
+        return pmm_mcp_text_result("project is required", true);
+    }
+    pmm_store_t *store = resolve_store(srv, project);
+    if (!store) {
+        free(project);
+        return pmm_mcp_text_result("project store not found — index the repository first", true);
+    }
+    pmm_project_doc_t *docs = NULL;
+    int count = 0;
+    int rc = pmm_store_docs_list(store, project, &docs, &count);
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = yyjson_mut_obj(doc);
+    yyjson_mut_doc_set_root(doc, root);
+    yyjson_mut_obj_add_strcpy(doc, root, "project", project);
+    yyjson_mut_val *arr = yyjson_mut_arr(doc);
+    if (rc == PMM_STORE_OK) {
+        for (int i = 0; i < count; i++) {
+            yyjson_mut_val *o = yyjson_mut_obj(doc);
+            yyjson_mut_obj_add_strcpy(doc, o, "path", docs[i].abs_path ? docs[i].abs_path : "");
+            yyjson_mut_obj_add_strcpy(doc, o, "kind", docs[i].kind ? docs[i].kind : "");
+            yyjson_mut_obj_add_bool(doc, o, "enabled", docs[i].enabled != 0);
+            yyjson_mut_obj_add_strcpy(doc, o, "added_at",
+                                      docs[i].added_at ? docs[i].added_at : "");
+            yyjson_mut_arr_add_val(arr, o);
+        }
+        pmm_store_docs_free(docs, count);
+    }
+    /* Also list Document nodes already in the graph */
+    pmm_node_t *nodes = NULL;
+    int ncount = 0;
+    if (pmm_store_find_nodes_by_label(store, project, "Document", &nodes, &ncount) == PMM_STORE_OK) {
+        yyjson_mut_val *indexed = yyjson_mut_arr(doc);
+        for (int i = 0; i < ncount; i++) {
+            yyjson_mut_val *o = yyjson_mut_obj(doc);
+            yyjson_mut_obj_add_strcpy(doc, o, "name", nodes[i].name ? nodes[i].name : "");
+            yyjson_mut_obj_add_strcpy(doc, o, "path",
+                                      nodes[i].file_path ? nodes[i].file_path : "");
+            yyjson_mut_obj_add_strcpy(doc, o, "qualified_name",
+                                      nodes[i].qualified_name ? nodes[i].qualified_name : "");
+            yyjson_mut_arr_add_val(indexed, o);
+        }
+        yyjson_mut_obj_add_val(doc, root, "indexed_documents", indexed);
+        pmm_store_free_nodes(nodes, ncount);
+    }
+    yyjson_mut_obj_add_val(doc, root, "attached", arr);
+    char *out = yyjson_mut_write(doc, 0, NULL);
+    yyjson_mut_doc_free(doc);
+    free(project);
+    char *result = pmm_mcp_text_result(out ? out : "{}", false);
+    free(out);
+    return result;
+}
+
+static char *handle_attach_project_doc(pmm_mcp_server_t *srv, const char *args) {
+    char *project = get_project_arg(args);
+    char *path = pmm_mcp_get_string_arg(args, "path");
+    char *kind = pmm_mcp_get_string_arg(args, "kind");
+    if (!project || !path) {
+        free(project);
+        free(path);
+        free(kind);
+        return pmm_mcp_text_result("project and path are required", true);
+    }
+    if (path_is_url(path)) {
+        free(project);
+        free(path);
+        free(kind);
+        return pmm_mcp_text_result("path must be a local filesystem path (URLs rejected)", true);
+    }
+    struct stat st;
+    if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) {
+        free(project);
+        free(path);
+        free(kind);
+        return pmm_mcp_text_result("path is not a readable regular file", true);
+    }
+    bool mutation_held = mcp_project_mutation_begin(srv, project);
+    if (!mutation_held) {
+        free(project);
+        free(path);
+        free(kind);
+        return pmm_mcp_text_result("project is busy; retry after indexing", true);
+    }
+    pmm_store_t *store = resolve_store(srv, project);
+    if (!store) {
+        mcp_project_mutation_end(srv, project);
+        free(project);
+        free(path);
+        free(kind);
+        return pmm_mcp_text_result("project store not found — index the repository first", true);
+    }
+    int rc = pmm_store_docs_attach(store, project, path, kind);
+    mcp_project_mutation_end(srv, project);
+    free(kind);
+    if (rc != PMM_STORE_OK) {
+        free(project);
+        free(path);
+        return pmm_mcp_text_result("failed to attach document", true);
+    }
+    char msg[PMM_SZ_512];
+    snprintf(msg, sizeof(msg),
+             "Attached %s to %s. Re-index the project (or wait for watcher) to ingest sections.",
+             path, project);
+    free(project);
+    free(path);
+    return pmm_mcp_text_result(msg, false);
+}
+
+static char *handle_detach_project_doc(pmm_mcp_server_t *srv, const char *args) {
+    char *project = get_project_arg(args);
+    char *path = pmm_mcp_get_string_arg(args, "path");
+    if (!project || !path) {
+        free(project);
+        free(path);
+        return pmm_mcp_text_result("project and path are required", true);
+    }
+    bool mutation_held = mcp_project_mutation_begin(srv, project);
+    if (!mutation_held) {
+        free(project);
+        free(path);
+        return pmm_mcp_text_result("project is busy; retry after indexing", true);
+    }
+    pmm_store_t *store = resolve_store(srv, project);
+    if (!store) {
+        mcp_project_mutation_end(srv, project);
+        free(project);
+        free(path);
+        return pmm_mcp_text_result("project store not found", true);
+    }
+    int rc = pmm_store_docs_detach(store, project, path);
+    mcp_project_mutation_end(srv, project);
+    free(project);
+    free(path);
+    return pmm_mcp_text_result(rc == PMM_STORE_OK ? "Detached." : "detach failed",
+                               rc != PMM_STORE_OK);
+}
+
+static char *handle_search_project_docs(pmm_mcp_server_t *srv, const char *args) {
+    char *project = get_project_arg(args);
+    char *query = pmm_mcp_get_string_arg(args, "query");
+    int limit = pmm_mcp_get_int_arg(args, "limit", 20);
+    if (limit <= 0 || limit > 100) {
+        limit = 20;
+    }
+    if (!project || !query || !query[0]) {
+        free(project);
+        free(query);
+        return pmm_mcp_text_result("project and query are required", true);
+    }
+    pmm_store_t *store = resolve_store(srv, project);
+    if (!store) {
+        free(project);
+        free(query);
+        return pmm_mcp_text_result("project store not found", true);
+    }
+    pmm_node_t *nodes = NULL;
+    int ncount = 0;
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = yyjson_mut_obj(doc);
+    yyjson_mut_doc_set_root(doc, root);
+    yyjson_mut_val *hits = yyjson_mut_arr(doc);
+    if (pmm_store_find_nodes_by_label(store, project, "DocSection", &nodes, &ncount) ==
+        PMM_STORE_OK) {
+        int added = 0;
+        for (int i = 0; i < ncount && added < limit; i++) {
+            const char *name = nodes[i].name ? nodes[i].name : "";
+            const char *props = nodes[i].properties_json ? nodes[i].properties_json : "";
+            const char *fp = nodes[i].file_path ? nodes[i].file_path : "";
+            if (strstr(name, query) || strstr(props, query) || strstr(fp, query)) {
+                yyjson_mut_val *o = yyjson_mut_obj(doc);
+                yyjson_mut_obj_add_strcpy(doc, o, "name", name);
+                yyjson_mut_obj_add_strcpy(doc, o, "path", fp);
+                yyjson_mut_obj_add_strcpy(doc, o, "qualified_name",
+                                          nodes[i].qualified_name ? nodes[i].qualified_name : "");
+                yyjson_mut_obj_add_int(doc, o, "start_line", nodes[i].start_line);
+                yyjson_mut_obj_add_int(doc, o, "end_line", nodes[i].end_line);
+                /* include truncated properties for context */
+                char trunc[400];
+                snprintf(trunc, sizeof(trunc), "%s", props);
+                yyjson_mut_obj_add_strcpy(doc, o, "properties", trunc);
+                yyjson_mut_arr_add_val(hits, o);
+                added++;
+            }
+        }
+        pmm_store_free_nodes(nodes, ncount);
+    }
+    /* fallback: Document titles */
+    if (yyjson_mut_arr_size(hits) == 0 &&
+        pmm_store_find_nodes_by_label(store, project, "Document", &nodes, &ncount) == PMM_STORE_OK) {
+        int added = 0;
+        for (int i = 0; i < ncount && added < limit; i++) {
+            const char *name = nodes[i].name ? nodes[i].name : "";
+            const char *fp = nodes[i].file_path ? nodes[i].file_path : "";
+            if (strstr(name, query) || strstr(fp, query)) {
+                yyjson_mut_val *o = yyjson_mut_obj(doc);
+                yyjson_mut_obj_add_strcpy(doc, o, "name", name);
+                yyjson_mut_obj_add_strcpy(doc, o, "path", fp);
+                yyjson_mut_obj_add_strcpy(doc, o, "qualified_name",
+                                          nodes[i].qualified_name ? nodes[i].qualified_name : "");
+                yyjson_mut_arr_add_val(hits, o);
+                added++;
+            }
+        }
+        pmm_store_free_nodes(nodes, ncount);
+    }
+    yyjson_mut_obj_add_val(doc, root, "results", hits);
+    yyjson_mut_obj_add_strcpy(doc, root, "query", query);
+    char *out = yyjson_mut_write(doc, 0, NULL);
+    yyjson_mut_doc_free(doc);
+    free(project);
+    free(query);
+    char *result = pmm_mcp_text_result(out ? out : "{\"results\":[]}", false);
+    free(out);
+    return result;
+}
+
+static char *handle_get_project_doc(pmm_mcp_server_t *srv, const char *args) {
+    char *project = get_project_arg(args);
+    char *path = pmm_mcp_get_string_arg(args, "path");
+    char *anchor = pmm_mcp_get_string_arg(args, "anchor");
+    if (!project || !path) {
+        free(project);
+        free(path);
+        free(anchor);
+        return pmm_mcp_text_result("project and path are required", true);
+    }
+    pmm_store_t *store = resolve_store(srv, project);
+    if (!store) {
+        free(project);
+        free(path);
+        free(anchor);
+        return pmm_mcp_text_result("project store not found", true);
+    }
+    pmm_node_t *nodes = NULL;
+    int ncount = 0;
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = yyjson_mut_obj(doc);
+    yyjson_mut_doc_set_root(doc, root);
+    const char *label = anchor && anchor[0] ? "DocSection" : "Document";
+    if (pmm_store_find_nodes_by_label(store, project, label, &nodes, &ncount) == PMM_STORE_OK) {
+        for (int i = 0; i < ncount; i++) {
+            const char *fp = nodes[i].file_path ? nodes[i].file_path : "";
+            const char *qn = nodes[i].qualified_name ? nodes[i].qualified_name : "";
+            if (strcmp(fp, path) != 0 && !strstr(fp, path) && !strstr(qn, path)) {
+                continue;
+            }
+            if (anchor && anchor[0] && !strstr(qn, anchor)) {
+                continue;
+            }
+            yyjson_mut_obj_add_strcpy(doc, root, "name", nodes[i].name ? nodes[i].name : "");
+            yyjson_mut_obj_add_strcpy(doc, root, "path", fp);
+            yyjson_mut_obj_add_strcpy(doc, root, "qualified_name", qn);
+            yyjson_mut_obj_add_strcpy(doc, root, "properties",
+                                      nodes[i].properties_json ? nodes[i].properties_json : "{}");
+            yyjson_mut_obj_add_int(doc, root, "start_line", nodes[i].start_line);
+            yyjson_mut_obj_add_int(doc, root, "end_line", nodes[i].end_line);
+            break;
+        }
+        pmm_store_free_nodes(nodes, ncount);
+    }
+    char *out = yyjson_mut_write(doc, 0, NULL);
+    yyjson_mut_doc_free(doc);
+    free(project);
+    free(path);
+    free(anchor);
+    char *result = pmm_mcp_text_result(out ? out : "{}", false);
+    free(out);
+    return result;
+}
+
 /* ── manage_adr ───────────────────────────────────────────────── */
 
 /* ADR "sections" mode: list markdown headers ('#'-prefixed lines) from the
@@ -10500,6 +10814,21 @@ static char *dispatch_tool(pmm_mcp_server_t *srv, const char *tool_name, const c
     }
     if (strcmp(tool_name, "manage_adr") == 0) {
         return handle_manage_adr(srv, args_json);
+    }
+    if (strcmp(tool_name, "list_project_docs") == 0) {
+        return handle_list_project_docs(srv, args_json);
+    }
+    if (strcmp(tool_name, "attach_project_doc") == 0) {
+        return handle_attach_project_doc(srv, args_json);
+    }
+    if (strcmp(tool_name, "detach_project_doc") == 0) {
+        return handle_detach_project_doc(srv, args_json);
+    }
+    if (strcmp(tool_name, "search_project_docs") == 0) {
+        return handle_search_project_docs(srv, args_json);
+    }
+    if (strcmp(tool_name, "get_project_doc") == 0) {
+        return handle_get_project_doc(srv, args_json);
     }
     if (strcmp(tool_name, "ingest_traces") == 0) {
         return handle_ingest_traces(srv, args_json);

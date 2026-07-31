@@ -954,7 +954,7 @@ static int phase1_scan_functions(pmm_gbuf_t *gbuf, pmm_sem_func_t **out_funcs,
     const pmm_gbuf_node_t **node_ptrs = NULL;
     int func_count = 0;
     int func_cap = 0;
-    const char *labels[] = {"Function", "Method", NULL};
+    const char *labels[] = {"Function", "Method", "DocSection", NULL};
     for (int li = 0; labels[li]; li++) {
         const pmm_gbuf_node_t **nodes = NULL;
         int node_count = 0;
