@@ -5,24 +5,24 @@
 #include "ui/embedded_assets.h"
 #include <string.h>
 
-extern const unsigned char _binary_assets_index_BJNkw6A5_js_start[];
-extern const unsigned char _binary_assets_index_BJNkw6A5_js_end[];
-extern const unsigned char _binary_assets_index_DYXybBnI_css_start[];
-extern const unsigned char _binary_assets_index_DYXybBnI_css_end[];
+extern const unsigned char _binary_assets_index_D_4xHTju_js_start[];
+extern const unsigned char _binary_assets_index_D_4xHTju_js_end[];
+extern const unsigned char _binary_assets_index_o_YN_eMz_css_start[];
+extern const unsigned char _binary_assets_index_o_YN_eMz_css_end[];
 extern const unsigned char _binary_index_html_start[];
 extern const unsigned char _binary_index_html_end[];
 
 pmm_embedded_file_t PMM_EMBEDDED_FILES[] = {
-    {"/assets/index-BJNkw6A5.js", _binary_assets_index_BJNkw6A5_js_start, 0, "application/javascript"},
-    {"/assets/index-DYXybBnI.css", _binary_assets_index_DYXybBnI_css_start, 0, "text/css"},
+    {"/assets/index-D_4xHTju.js", _binary_assets_index_D_4xHTju_js_start, 0, "application/javascript"},
+    {"/assets/index-o-YN-eMz.css", _binary_assets_index_o_YN_eMz_css_start, 0, "text/css"},
     {"/index.html", _binary_index_html_start, 0, "text/html"},
 };
 const int PMM_EMBEDDED_FILE_COUNT = 3;
 
 static void __attribute__((constructor)) init_embedded_sizes(void) {
     pmm_embedded_file_t *files = PMM_EMBEDDED_FILES;
-    files[0].size = (unsigned int)(_binary_assets_index_BJNkw6A5_js_end - _binary_assets_index_BJNkw6A5_js_start);
-    files[1].size = (unsigned int)(_binary_assets_index_DYXybBnI_css_end - _binary_assets_index_DYXybBnI_css_start);
+    files[0].size = (unsigned int)(_binary_assets_index_D_4xHTju_js_end - _binary_assets_index_D_4xHTju_js_start);
+    files[1].size = (unsigned int)(_binary_assets_index_o_YN_eMz_css_end - _binary_assets_index_o_YN_eMz_css_start);
     files[2].size = (unsigned int)(_binary_index_html_end - _binary_index_html_start);
 }
 
