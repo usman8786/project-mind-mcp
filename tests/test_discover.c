@@ -116,9 +116,11 @@ TEST(no_skip_test_full) {
     PASS();
 }
 
-/* Fast mode additional skips */
-TEST(skip_fast_docs) {
-    ASSERT_TRUE(pmm_should_skip_dir("docs", PMM_MODE_FAST));
+/* Fast mode: docs/ are kept so pass_docs can index Document nodes */
+TEST(no_skip_fast_docs) {
+    ASSERT_FALSE(pmm_should_skip_dir("docs", PMM_MODE_FAST));
+    ASSERT_FALSE(pmm_should_skip_dir("doc", PMM_MODE_FAST));
+    ASSERT_FALSE(pmm_should_skip_dir("documentation", PMM_MODE_FAST));
     PASS();
 }
 TEST(skip_fast_examples) {
@@ -1010,14 +1012,14 @@ TEST(discover_pmmignore_negates_only_nested_skip_dir) {
     PASS();
 }
 
-/* Negation also un-skips FAST-mode skip dirs ("docs" is in FAST_SKIP_DIRS). */
+/* Negation also un-skips FAST-mode skip dirs ("examples" is in FAST_SKIP_DIRS). */
 TEST(discover_pmmignore_negates_fast_skip_dir) {
     char *base = th_mktempdir("pmm_disc_cbmi_neg_fast");
     ASSERT(base != NULL);
 
-    th_write_file(TH_PATH(base, ".pmmignore"), "!docs/\n");
+    th_write_file(TH_PATH(base, ".pmmignore"), "!examples/\n");
     th_write_file(TH_PATH(base, "main.go"), "package main\n");
-    th_write_file(TH_PATH(base, "docs/guide.go"), "package docs\n");
+    th_write_file(TH_PATH(base, "examples/guide.go"), "package examples\n");
 
     pmm_discover_opts_t opts = {.mode = PMM_MODE_FAST};
     pmm_file_info_t *files = NULL;
@@ -1027,7 +1029,7 @@ TEST(discover_pmmignore_negates_fast_skip_dir) {
     ASSERT_EQ(rc, 0);
     ASSERT_EQ(count, 2);
     ASSERT_TRUE(discover_has_rel_path(files, count, "main.go"));
-    ASSERT_TRUE(discover_has_rel_path(files, count, "docs/guide.go"));
+    ASSERT_TRUE(discover_has_rel_path(files, count, "examples/guide.go"));
 
     pmm_discover_free(files, count);
     th_cleanup(base);
@@ -1380,7 +1382,7 @@ SUITE(discover) {
     RUN_TEST(no_skip_test_full);
 
     /* Fast mode directory skips */
-    RUN_TEST(skip_fast_docs);
+    RUN_TEST(no_skip_fast_docs);
     RUN_TEST(skip_fast_examples);
     RUN_TEST(skip_fast_tests);
     RUN_TEST(skip_fast_fixtures);

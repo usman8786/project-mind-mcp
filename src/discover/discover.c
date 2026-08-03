@@ -4,7 +4,7 @@
  * Walks a repository directory tree, applying:
  *   1. Hardcoded directory skip patterns (60+ dirs like .git, node_modules)
  *   2. Hardcoded suffix filters (.pyc, .png, .wasm, etc.)
- *   3. Fast-mode additional filters (docs, examples, lock files, etc.)
+ *   3. Fast-mode additional filters (examples, fixtures, lock files, etc.)
  *   4. Gitignore-style pattern matching
  *   5. Language detection for accepted files
  */
@@ -52,8 +52,10 @@ static const char *ALWAYS_SKIP_DIRS[] = {
 
 static const char *FAST_SKIP_DIRS[] = {
     "generated", "gen",           "auto-generated", "fixtures",     "testdata",    "test_data",
-    "__tests__", "__mocks__",     "__snapshots__",  "__fixtures__", "__test__",    "docs",
-    "doc",       "documentation", "examples",       "example",      "samples",     "sample",
+    "__tests__", "__mocks__",     "__snapshots__",  "__fixtures__", "__test__",
+    /* docs/doc/documentation intentionally NOT skipped: pass_docs indexes them as
+     * Document/DocSection. Fast mode still skips examples/assets/etc. noise. */
+    "examples",  "example",       "samples",        "sample",
     "assets",    "static",        "public",         "media",        "third_party", "thirdparty",
     "3rdparty",  "external",      "migrations",     "seeds",        "e2e",         "integration",
     "locale",    "locales",       "i18n",           "l10n",         "scripts",     "tools",

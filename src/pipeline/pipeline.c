@@ -123,6 +123,12 @@ struct pmm_pipeline {
      * can be restored after the rebuild. NULL when no ADR existed. Issue #516. */
     char *saved_adr;
 
+    /* Attached project_documents captured before a full-reindex DB delete
+     * (same lifetime as saved_adr). Without this, pass_docs loses attachments
+     * because the live DB is unlinked before the docs pass runs. */
+    pmm_project_doc_t *saved_docs;
+    int saved_docs_count;
+
     /* Deterministic test-only seam at the final publication boundary. Kept
      * per pipeline so concurrent test/process activity cannot cross-trigger. */
     void (*before_publish_hook)(pmm_pipeline_t *, const char *, void *);
@@ -252,6 +258,9 @@ void pmm_pipeline_free(pmm_pipeline_t *p) {
     free(p->saved_adr); /* freed here too: error paths can exit before the
                          * restore in dump_and_persist_hashes runs. Issue #516. */
     p->saved_adr = NULL;
+    pmm_store_docs_free(p->saved_docs, p->saved_docs_count);
+    p->saved_docs = NULL;
+    p->saved_docs_count = 0;
     pmm_git_context_free(&p->git_ctx);
     /* gbuf, store, registry freed during/after run */
     /* Defensively free userconfig in case run() was never called or panicked */
@@ -1189,20 +1198,26 @@ static int try_incremental_or_delete_db(pmm_pipeline_t *p, pmm_file_info_t *file
         pmm_store_close(check_store);
     }
     pmm_log_info("pipeline.route", "path", "reindex", "action", "deleting old db");
-    /* Capture any ADR before deleting the DB so the full-reindex rebuild can
-     * restore it (project_summaries is otherwise lost). Issue #516. */
+    /* Capture any ADR / attached docs before deleting the DB so the full-reindex
+     * rebuild can restore them (project_summaries + project_documents are
+     * otherwise lost). Issue #516 / project document context. */
     {
-        pmm_store_t *adr_store = pmm_store_open_path(db_path);
-        if (adr_store) {
+        pmm_store_t *meta_store = pmm_store_open_path(db_path);
+        if (meta_store) {
             pmm_adr_t existing;
-            if (pmm_store_adr_get(adr_store, p->project_name, &existing) == PMM_STORE_OK) {
+            if (pmm_store_adr_get(meta_store, p->project_name, &existing) == PMM_STORE_OK) {
                 if (existing.content) {
                     free(p->saved_adr);
                     p->saved_adr = strdup(existing.content);
                 }
                 pmm_store_adr_free(&existing);
             }
-            pmm_store_close(adr_store);
+            pmm_store_docs_free(p->saved_docs, p->saved_docs_count);
+            p->saved_docs = NULL;
+            p->saved_docs_count = 0;
+            (void)pmm_store_docs_list(meta_store, p->project_name, &p->saved_docs,
+                                      &p->saved_docs_count);
+            pmm_store_close(meta_store);
         }
     }
     (void)pmm_unlink(db_path);
@@ -1292,12 +1307,23 @@ static int dump_and_persist_hashes(pmm_pipeline_t *p, const pmm_file_info_t *fil
         }
         PMM_PROF_END("persist", "2_delete_file_hashes", t_delhash);
 
-        /* Restore the ADR captured before the dump. Surface a failed restore
-         * rather than silently dropping the ADR (the original #516 symptom). */
+        /* Restore the ADR / attached docs captured before the dump. */
         PMM_PROF_START(t_adr);
         if (p->saved_adr) {
             if (pmm_store_adr_store(hash_store, p->project_name, p->saved_adr) != PMM_STORE_OK) {
                 pmm_log_error("pipeline.err", "phase", "adr_restore", "project", p->project_name);
+            }
+        }
+        if (p->saved_docs && p->saved_docs_count > 0) {
+            for (int di = 0; di < p->saved_docs_count; di++) {
+                if (!p->saved_docs[di].abs_path || !p->saved_docs[di].enabled) {
+                    continue;
+                }
+                if (pmm_store_docs_attach(hash_store, p->project_name, p->saved_docs[di].abs_path,
+                                          p->saved_docs[di].kind) != PMM_STORE_OK) {
+                    pmm_log_error("pipeline.err", "phase", "docs_restore", "path",
+                                  p->saved_docs[di].abs_path);
+                }
             }
         }
         PMM_PROF_END("persist", "3_adr_restore", t_adr);
@@ -1436,6 +1462,9 @@ static int dump_and_persist_hashes(pmm_pipeline_t *p, const pmm_file_info_t *fil
     }
     free(p->saved_adr);
     p->saved_adr = NULL;
+    pmm_store_docs_free(p->saved_docs, p->saved_docs_count);
+    p->saved_docs = NULL;
+    p->saved_docs_count = 0;
     free(db_path);
 
     return 0;
@@ -1648,6 +1677,8 @@ static int pmm_pipeline_run_staged(pmm_pipeline_t *p, bool *was_incremental) {
         .path_aliases = path_aliases,
         .excluded_dirs = p->excluded_dirs,
         .excluded_count = p->excluded_count,
+        .attached_docs = p->saved_docs,
+        .attached_docs_count = p->saved_docs_count,
     };
 
     rc = run_extraction_phase(p, &ctx, files, file_count);

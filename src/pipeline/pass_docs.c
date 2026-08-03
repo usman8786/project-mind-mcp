@@ -126,6 +126,21 @@ static int is_readme(const char *rel) {
 
 static void process_one_path(pmm_pipeline_ctx_t *ctx, const char *abs_path, const char *display,
                              const char *source) {
+    char **paths = NULL;
+    int npaths = 0;
+    if (pmm_doc_collect_paths(abs_path, &paths, &npaths) == 0 && npaths > 0) {
+        for (int i = 0; i < npaths; i++) {
+            pmm_doc_ir_t ir;
+            memset(&ir, 0, sizeof(ir));
+            const char *disp = (npaths == 1 && display) ? display : paths[i];
+            if (pmm_doc_parse_file(paths[i], disp, &ir) == 0) {
+                upsert_doc_ir(ctx, &ir, source);
+                pmm_doc_ir_free(&ir);
+            }
+        }
+        pmm_doc_paths_free(paths, npaths);
+        return;
+    }
     pmm_doc_ir_t ir;
     memset(&ir, 0, sizeof(ir));
     if (pmm_doc_parse_file(abs_path, display, &ir) != 0) {
@@ -163,25 +178,39 @@ int pmm_pipeline_pass_docs(pmm_pipeline_ctx_t *ctx, const pmm_file_info_t *files
         process_one_path(ctx, abs, rel, "in_repo");
     }
 
-    /* Attached documents from store registry */
-    char db_path[1024];
-    const char *cache = pmm_resolve_cache_dir();
-    if (cache && ctx->project_name) {
-        snprintf(db_path, sizeof(db_path), "%s/%s.db", cache, ctx->project_name);
-        pmm_store_t *store = pmm_store_open_path_query(db_path);
-        if (store) {
-            pmm_project_doc_t *docs = NULL;
-            int dcount = 0;
-            if (pmm_store_docs_list(store, ctx->project_name, &docs, &dcount) == PMM_STORE_OK) {
-                for (int i = 0; i < dcount; i++) {
-                    if (!docs[i].enabled || !docs[i].abs_path) {
-                        continue;
-                    }
-                    process_one_path(ctx, docs[i].abs_path, docs[i].abs_path, "attached");
-                }
-                pmm_store_docs_free(docs, dcount);
+    /* Attached documents: prefer list captured before a full-reindex DB delete,
+     * then fall back to the live project DB (incremental / first attach). */
+    int attached_done = 0;
+    if (ctx->attached_docs && ctx->attached_docs_count > 0) {
+        for (int i = 0; i < ctx->attached_docs_count; i++) {
+            if (!ctx->attached_docs[i].enabled || !ctx->attached_docs[i].abs_path) {
+                continue;
             }
-            pmm_store_close(store);
+            process_one_path(ctx, ctx->attached_docs[i].abs_path, ctx->attached_docs[i].abs_path,
+                             "attached");
+            attached_done++;
+        }
+    }
+    if (attached_done == 0) {
+        char db_path[1024];
+        const char *cache = pmm_resolve_cache_dir();
+        if (cache && ctx->project_name) {
+            snprintf(db_path, sizeof(db_path), "%s/%s.db", cache, ctx->project_name);
+            pmm_store_t *store = pmm_store_open_path_query(db_path);
+            if (store) {
+                pmm_project_doc_t *docs = NULL;
+                int dcount = 0;
+                if (pmm_store_docs_list(store, ctx->project_name, &docs, &dcount) == PMM_STORE_OK) {
+                    for (int i = 0; i < dcount; i++) {
+                        if (!docs[i].enabled || !docs[i].abs_path) {
+                            continue;
+                        }
+                        process_one_path(ctx, docs[i].abs_path, docs[i].abs_path, "attached");
+                    }
+                    pmm_store_docs_free(docs, dcount);
+                }
+                pmm_store_close(store);
+            }
         }
     }
 

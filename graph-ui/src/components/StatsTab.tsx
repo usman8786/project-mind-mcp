@@ -51,12 +51,18 @@ function displayName(project: Project): string {
 
 /* ── Documents button + modal ───────────────────────────── */
 
-function DocsButton({ project }: { project: string }) {
+function DocsButton({ project, rootPath }: { project: string; rootPath?: string }) {
   const t = useUiMessages();
   const [open, setOpen] = useState(false);
+  const [browse, setBrowse] = useState(false);
   const [docs, setDocs] = useState<{ path: string; kind: string }[]>([]);
   const [path, setPath] = useState("");
   const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [currentPath, setCurrentPath] = useState(rootPath || "");
+  const [dirs, setDirs] = useState<string[]>([]);
+  const [files, setFiles] = useState<string[]>([]);
+  const [parent, setParent] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -68,23 +74,57 @@ function DocsButton({ project }: { project: string }) {
     }
   }, [project]);
 
+  const loadBrowse = useCallback(async (dir: string) => {
+    try {
+      const res = await fetch(
+        `/api/browse?path=${encodeURIComponent(dir)}&files=1`,
+      );
+      const data = await res.json();
+      setCurrentPath(data.path || dir);
+      setDirs(Array.isArray(data.dirs) ? data.dirs : []);
+      setFiles(Array.isArray(data.files) ? data.files : []);
+      setParent(typeof data.parent === "string" ? data.parent : "");
+    } catch {
+      setDirs([]);
+      setFiles([]);
+    }
+  }, []);
+
   useEffect(() => {
     if (open) refresh();
   }, [open, refresh]);
 
-  const attach = async () => {
-    if (!path.trim()) return;
+  useEffect(() => {
+    if (browse) {
+      void loadBrowse(currentPath || rootPath || "/");
+    }
+  }, [browse]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const attachPath = async (target: string) => {
+    if (!target.trim()) return;
     setBusy(true);
+    setMsg("");
     try {
-      await fetch("/api/docs", {
+      const res = await fetch("/api/docs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project, path: path.trim(), op: "attach" }),
+        body: JSON.stringify({ project, path: target.trim(), op: "attach" }),
       });
-      setPath("");
-      await refresh();
-    } catch { /* ignore */ }
-    finally { setBusy(false); }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMsg(data.error || "Attach failed");
+      } else {
+        setMsg(
+          `Attached ${data.attached ?? 1} file(s). Click Re-index to load Document/DocSection nodes.`,
+        );
+        setPath("");
+        await refresh();
+      }
+    } catch {
+      setMsg("Attach failed");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const detach = async (p: string) => {
@@ -100,6 +140,37 @@ function DocsButton({ project }: { project: string }) {
     finally { setBusy(false); }
   };
 
+  const reindex = async () => {
+    if (!rootPath) {
+      setMsg("Missing project root path — index from Projects tab first.");
+      return;
+    }
+    setBusy(true);
+    setMsg("Starting re-index…");
+    try {
+      const res = await fetch("/api/index", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ root_path: rootPath, project_name: project }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setMsg(data.error || "Re-index failed to start");
+      } else {
+        setMsg("Re-index started. Watch the project status; then filter graph labels Document / DocSection.");
+      }
+    } catch {
+      setMsg("Re-index failed to start");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const joinBrowse = (base: string, name: string) => {
+    const b = base.replace(/\\/g, "/").replace(/\/$/, "");
+    return `${b}/${name}`;
+  };
+
   return (
     <>
       <button
@@ -112,7 +183,7 @@ function DocsButton({ project }: { project: string }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setOpen(false)}>
           <div className="absolute inset-0 bg-black/65 backdrop-blur-sm" />
           <div
-            className="anim-modal-in relative surface-panel rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[80vh] flex flex-col"
+            className="anim-modal-in relative surface-panel rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[85vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
@@ -123,7 +194,7 @@ function DocsButton({ project }: { project: string }) {
               <button onClick={() => setOpen(false)} className="text-muted-foreground/40 hover:text-foreground text-[16px] p-1">×</button>
             </div>
             <p className="text-[11px] text-muted-foreground mb-3">{t.docs.hint}</p>
-            <div className="flex gap-2 mb-4">
+            <div className="flex gap-2 mb-3">
               <input
                 value={path}
                 onChange={(e) => setPath(e.target.value)}
@@ -131,13 +202,80 @@ function DocsButton({ project }: { project: string }) {
                 className="flex-1 bg-background/60 border border-border/50 rounded-xl px-3 py-2 text-[12px] text-foreground font-mono outline-none focus:border-primary/40"
               />
               <button
-                onClick={attach}
+                onClick={() => void attachPath(path)}
                 disabled={busy}
                 className="px-3 py-2 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary text-[12px] font-medium disabled:opacity-30"
               >
                 {t.docs.add}
               </button>
             </div>
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => {
+                  setBrowse((v) => !v);
+                  if (!browse) {
+                    setCurrentPath(rootPath || currentPath || "/");
+                  }
+                }}
+                className="px-3 py-1.5 rounded-lg bg-white/[0.04] text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                {browse ? t.docs.hideBrowse : t.docs.browse}
+              </button>
+              <button
+                onClick={() => void reindex()}
+                disabled={busy}
+                className="px-3 py-1.5 rounded-lg bg-accent/20 text-accent text-[11px] font-medium disabled:opacity-30"
+              >
+                {t.docs.reindex}
+              </button>
+            </div>
+            {browse && (
+              <div className="mb-4 rounded-xl border border-border/40 p-3 max-h-[220px] overflow-auto">
+                <p className="text-[10px] font-mono text-muted-foreground mb-2 truncate">{currentPath}</p>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {parent && (
+                    <button
+                      onClick={() => void loadBrowse(parent)}
+                      className="px-2 py-1 rounded bg-white/[0.04] text-[10px] text-muted-foreground"
+                    >
+                      ..
+                    </button>
+                  )}
+                  <button
+                    onClick={() => void attachPath(currentPath)}
+                    disabled={busy}
+                    className="px-2 py-1 rounded bg-primary/15 text-primary text-[10px]"
+                  >
+                    {t.docs.attachFolder}
+                  </button>
+                </div>
+                <div className="space-y-1">
+                  {dirs.map((d) => (
+                    <button
+                      key={`d-${d}`}
+                      onClick={() => void loadBrowse(joinBrowse(currentPath, d))}
+                      className="block w-full text-left text-[11px] font-mono text-foreground/90 hover:bg-white/[0.04] rounded px-2 py-1"
+                    >
+                      {d}/
+                    </button>
+                  ))}
+                  {files.map((f) => (
+                    <button
+                      key={`f-${f}`}
+                      onClick={() => void attachPath(joinBrowse(currentPath, f))}
+                      disabled={busy}
+                      className="block w-full text-left text-[11px] font-mono text-accent/90 hover:bg-white/[0.04] rounded px-2 py-1"
+                    >
+                      {f}
+                    </button>
+                  ))}
+                  {dirs.length === 0 && files.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground/70 px-2">{t.docs.browseEmpty}</p>
+                  )}
+                </div>
+              </div>
+            )}
+            {msg && <p className="text-[11px] text-accent mb-3">{msg}</p>}
             <div className="flex-1 overflow-auto space-y-2 min-h-[120px]">
               {docs.length === 0 && (
                 <p className="text-[12px] text-muted-foreground/70">{t.docs.empty}</p>
@@ -149,7 +287,7 @@ function DocsButton({ project }: { project: string }) {
                     {d.kind && <p className="text-[10px] text-muted-foreground">{d.kind}</p>}
                   </div>
                   <button
-                    onClick={() => detach(d.path)}
+                    onClick={() => void detach(d.path)}
                     disabled={busy}
                     className="text-[11px] text-destructive/70 hover:text-destructive"
                   >
@@ -775,7 +913,7 @@ export function StatsTab({ onSelectProject }: StatsTabProps) {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <AdrButton project={p.project.name} />
-                    <DocsButton project={p.project.name} />
+                    <DocsButton project={p.project.name} rootPath={p.project.root_path} />
                     <button
                       onClick={() => onSelectProject(p.project.name)}
                       className="px-3 py-1.5 rounded-lg bg-primary/15 hover:bg-primary/25 text-primary text-[12px] font-semibold transition-all"

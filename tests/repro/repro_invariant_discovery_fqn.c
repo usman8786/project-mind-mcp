@@ -280,8 +280,6 @@ TEST(invariant_discovery_fast_skip_dirs) {
         { "__tests__" },
         { "__mocks__" },
         { "__snapshots__" },
-        { "docs" },
-        { "doc" },
         { "examples" },
         { "assets" },
         { "static" },

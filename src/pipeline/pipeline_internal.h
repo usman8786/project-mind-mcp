@@ -13,6 +13,7 @@
 #include "graph_buffer/graph_buffer.h"
 #include "discover/discover.h"
 #include "foundation/hash_table.h"
+#include "store/store.h"
 #include "pmm.h"
 #include "lsp/go_lsp.h" /* CBMLSPDef for pmm_parallel_resolve cross-LSP inputs */
 #include <stdatomic.h>
@@ -123,6 +124,11 @@ typedef struct {
     /* ObjectScript method-return-type table built from extracted definitions
      * (NULL until pass_calls builds it). Owned by pipeline.c. */
     const CBMReturnTypeTable *return_type_table;
+
+    /* Attached project documents captured before a full reindex deletes the
+     * live DB. Borrowed from pmm_pipeline_t.saved_docs for pass_docs. */
+    const pmm_project_doc_t *attached_docs;
+    int attached_docs_count;
 } pmm_pipeline_ctx_t;
 
 static inline int pmm_pipeline_relpath_is_excluded(const char *rel_path, char *const *excluded_dirs,

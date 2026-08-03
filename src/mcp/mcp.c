@@ -43,6 +43,7 @@ enum {
 #include "mcp/mcp.h"
 #include "mcp/mcp_internal.h"
 #include "store/store.h"
+#include "extract_docs.h"
 #include <sqlite3.h>
 #include "cypher/cypher.h"
 #include "discover/discover.h"
@@ -658,9 +659,10 @@ static const tool_def_t TOOLS[] = {
      "\"project\"]}"},
 
     {"attach_project_doc", "Attach project doc",
-     "Attach a local file path as project context (md/txt/rst/yaml/json/docx/pdf). Rejects URLs.",
+     "Attach a local file or folder as project context (md/txt/rst/yaml/json/docx/pdf). "
+     "Folders expand to matching files. Rejects URLs. Re-index after attach.",
      "{\"type\":\"object\",\"properties\":{\"project\":{\"type\":\"string\"},\"path\":{\"type\":"
-     "\"string\",\"description\":\"Absolute local filesystem "
+     "\"string\",\"description\":\"Absolute local file or folder "
      "path\"},\"kind\":{\"type\":\"string\"}},"
      "\"required\":[\"project\",\"path\"]}"},
 
@@ -10299,11 +10301,11 @@ static char *handle_attach_project_doc(pmm_mcp_server_t *srv, const char *args) 
         return pmm_mcp_text_result("path must be a local filesystem path (URLs rejected)", true);
     }
     struct stat st;
-    if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) {
+    if (stat(path, &st) != 0) {
         free(project);
         free(path);
         free(kind);
-        return pmm_mcp_text_result("path is not a readable regular file", true);
+        return pmm_mcp_text_result("path is not readable", true);
     }
     bool mutation_held = mcp_project_mutation_begin(srv, project);
     if (!mutation_held) {
@@ -10320,18 +10322,36 @@ static char *handle_attach_project_doc(pmm_mcp_server_t *srv, const char *args) 
         free(kind);
         return pmm_mcp_text_result("project store not found — index the repository first", true);
     }
-    int rc = pmm_store_docs_attach(store, project, path, kind);
-    mcp_project_mutation_end(srv, project);
-    free(kind);
-    if (rc != PMM_STORE_OK) {
+    char **paths = NULL;
+    int npaths = 0;
+    if (pmm_doc_collect_paths(path, &paths, &npaths) != 0 || npaths == 0) {
+        mcp_project_mutation_end(srv, project);
         free(project);
         free(path);
-        return pmm_mcp_text_result("failed to attach document", true);
+        free(kind);
+        return pmm_mcp_text_result("path is not a readable doc file or folder", true);
+    }
+    int attached = 0;
+    int rc = PMM_STORE_OK;
+    for (int i = 0; i < npaths; i++) {
+        if (pmm_store_docs_attach(store, project, paths[i], kind) == PMM_STORE_OK) {
+            attached++;
+        } else {
+            rc = PMM_STORE_ERR;
+        }
+    }
+    pmm_doc_paths_free(paths, npaths);
+    mcp_project_mutation_end(srv, project);
+    free(kind);
+    if (attached == 0 || rc != PMM_STORE_OK) {
+        free(project);
+        free(path);
+        return pmm_mcp_text_result("failed to attach document(s)", true);
     }
     char msg[PMM_SZ_512];
     snprintf(msg, sizeof(msg),
-             "Attached %s to %s. Re-index the project (or wait for watcher) to ingest sections.",
-             path, project);
+             "Attached %d document(s) from %s to %s. Re-index the project to ingest sections.",
+             attached, path, project);
     free(project);
     free(path);
     return pmm_mcp_text_result(msg, false);

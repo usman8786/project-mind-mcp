@@ -19,6 +19,7 @@
 #include "ui/layout3d.h"
 #include "mcp/mcp.h"
 #include "store/store.h"
+#include "extract_docs.h"
 #include "watcher/watcher.h"
 #include "cli/cli.h"
 #include "git/git_context.h"
@@ -637,9 +638,10 @@ static void append_roots_json(char *buf, size_t bufsz, int *pos) {
     http_appendf(buf, bufsz, pos, "]");
 }
 
-/* GET /api/browse?path=/some/dir — list subdirectories for file picker */
+/* GET /api/browse?path=/some/dir[&files=1] — list subdirectories (+ optional doc files) */
 static void handle_browse(pmm_http_conn_t *c, const pmm_http_req_t *req) {
     char path[1024] = {0};
+    char files_flag[8] = {0};
     const char *home = pmm_get_home_dir();
     if (!pmm_http_query_param(req->query, "path", path, (int)sizeof(path)) || path[0] == '\0') {
         /* Default to home directory */
@@ -648,6 +650,8 @@ static void handle_browse(pmm_http_conn_t *c, const pmm_http_req_t *req) {
         else
             snprintf(path, sizeof(path), "/");
     }
+    (void)pmm_http_query_param(req->query, "files", files_flag, (int)sizeof(files_flag));
+    int want_files = files_flag[0] == '1' || strcmp(files_flag, "true") == 0;
 
     /* The browser UI may send Windows backslash separators (e.g.
      * "D:\projects\demo"). Normalize to forward slashes before the pmm_is_dir
@@ -667,38 +671,53 @@ static void handle_browse(pmm_http_conn_t *c, const pmm_http_req_t *req) {
     }
 
     /* Build JSON response */
-    char buf[32768];
+    char buf[65536];
     int pos = 0;
     http_appendf(buf, sizeof(buf), &pos, "{\"path\":\"%s\",\"dirs\":[", path);
 
     struct dirent *ent;
     int count = 0;
+    int file_count = 0;
+    char files_json[32768];
+    int fpos = 0;
+    files_json[0] = '\0';
+    if (want_files) {
+        http_appendf(files_json, sizeof(files_json), &fpos, "[");
+    }
+
     while ((ent = readdir(dir)) != NULL) {
         /* Skip hidden dirs and . / .. */
         if (ent->d_name[0] == '.')
             continue;
 
-        /* Check if it's actually a directory */
         char full[2048];
         snprintf(full, sizeof(full), "%s/%s", path, ent->d_name);
-        if (!pmm_is_dir(full))
+        if (pmm_is_dir(full)) {
+            if (count > 0)
+                buf[pos++] = ',';
+            {
+                char esc[512];
+                pmm_json_escape(esc, (int)sizeof(esc), ent->d_name);
+                http_appendf(buf, sizeof(buf), &pos, "\"%s\"", esc);
+            }
+            if (pos >= (int)sizeof(buf)) {
+                pos = (int)sizeof(buf) - 1;
+            }
+            count++;
+            if (count >= 200)
+                break;
             continue;
-
-        if (count > 0)
-            buf[pos++] = ',';
-        /* Escape directory name to prevent XSS (e.g., names with quotes/angle brackets) */
-        {
-            char esc[512];
-            pmm_json_escape(esc, (int)sizeof(esc), ent->d_name);
-            http_appendf(buf, sizeof(buf), &pos, "\"%s\"", esc);
         }
-        if (pos >= (int)sizeof(buf)) {
-            pos = (int)sizeof(buf) - 1;
+        if (want_files && pmm_doc_path_is_document(ent->d_name) && file_count < 200) {
+            if (file_count > 0)
+                files_json[fpos++] = ',';
+            {
+                char esc[512];
+                pmm_json_escape(esc, (int)sizeof(esc), ent->d_name);
+                http_appendf(files_json, sizeof(files_json), &fpos, "\"%s\"", esc);
+            }
+            file_count++;
         }
-        count++;
-
-        if (count >= 200)
-            break; /* safety limit */
     }
     closedir(dir);
 
@@ -723,6 +742,10 @@ static void handle_browse(pmm_http_conn_t *c, const pmm_http_req_t *req) {
         char esc_parent[2048];
         pmm_json_escape(esc_parent, (int)sizeof(esc_parent), parent);
         http_appendf(buf, sizeof(buf), &pos, "],\"parent\":\"%s\"", esc_parent);
+        if (want_files) {
+            http_appendf(files_json, sizeof(files_json), &fpos, "]");
+            http_appendf(buf, sizeof(buf), &pos, ",\"files\":%s", files_json);
+        }
         append_roots_json(buf, sizeof(buf), &pos);
         http_appendf(buf, sizeof(buf), &pos, "}");
     }
@@ -941,10 +964,34 @@ static void handle_docs_mutate(pmm_http_server_t *srv, pmm_http_conn_t *c,
         return;
     }
     int rc = PMM_STORE_ERR;
+    int attached = 0;
     if (strcmp(op, "detach") == 0) {
         rc = pmm_store_docs_detach(store, proj, path);
     } else {
-        rc = pmm_store_docs_attach(store, proj, path, kind);
+        char **paths = NULL;
+        int npaths = 0;
+        if (pmm_doc_collect_paths(path, &paths, &npaths) != 0 || npaths == 0) {
+            pmm_store_close(store);
+            if (mutation_held) {
+                srv->mutation_end(srv->mutation_context, proj);
+            }
+            yyjson_doc_free(jdoc);
+            pmm_http_replyf(c, 400, g_cors_json,
+                            "{\"error\":\"path is not a readable doc file or folder\"}");
+            return;
+        }
+        rc = PMM_STORE_OK;
+        for (int i = 0; i < npaths; i++) {
+            if (pmm_store_docs_attach(store, proj, paths[i], kind) == PMM_STORE_OK) {
+                attached++;
+            } else {
+                rc = PMM_STORE_ERR;
+            }
+        }
+        pmm_doc_paths_free(paths, npaths);
+        if (attached > 0) {
+            rc = PMM_STORE_OK;
+        }
     }
     pmm_store_close(store);
     if (mutation_held) {
@@ -952,7 +999,7 @@ static void handle_docs_mutate(pmm_http_server_t *srv, pmm_http_conn_t *c,
     }
     yyjson_doc_free(jdoc);
     if (rc == PMM_STORE_OK) {
-        pmm_http_replyf(c, 200, g_cors_json, "{\"ok\":true}");
+        pmm_http_replyf(c, 200, g_cors_json, "{\"ok\":true,\"attached\":%d}", attached);
     } else {
         pmm_http_replyf(c, 500, g_cors_json, "{\"error\":\"mutation failed\"}");
     }

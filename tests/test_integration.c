@@ -752,7 +752,7 @@ TEST(store_bfs_multi_reports_truncation_at_ceiling) {
 }
 
 /* #411: index_repository silently drops entire subtrees with no record.
- * Moderate/fast mode applies FAST_SKIP_DIRS (tools/scripts/bin/docs/...) and ALL
+ * Moderate/fast mode applies FAST_SKIP_DIRS (tools/scripts/bin/...) and ALL
  * modes apply ALWAYS_SKIP_DIRS (node_modules/...), so files are excluded from the
  * graph — but the response only reports nodes/edges/status, giving the user no
  * way to know which subtrees were dropped (the reporter lost a 47-file tools/).

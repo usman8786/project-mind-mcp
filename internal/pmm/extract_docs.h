@@ -48,6 +48,11 @@ int pmm_doc_parse_text(const char *path, pmm_doc_kind_t kind, const char *text, 
 /* Load file from disk and parse (text formats + docx/pdf adapters). */
 int pmm_doc_parse_file(const char *abs_or_rel_path, const char *display_path, pmm_doc_ir_t *out);
 
+/* Collect document paths under a file or directory (recursive, depth-capped).
+ * out_paths is an array of malloc'd strings; caller frees via pmm_doc_paths_free. */
+int pmm_doc_collect_paths(const char *root_path, char ***out_paths, int *out_count);
+void pmm_doc_paths_free(char **paths, int count);
+
 void pmm_doc_ir_free(pmm_doc_ir_t *doc);
 
 #endif /* PMM_EXTRACT_DOCS_H */
